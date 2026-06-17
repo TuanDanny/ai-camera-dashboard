@@ -1,0 +1,67 @@
+{
+  "title": "Accuracy Report",
+  "tags": ["accuracy", "shtp"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Overall AI Accuracy (%)",
+      "type": "gauge",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT accuracy_overall_pct FROM accuracy_evaluations ORDER BY eval_start DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "green", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Accuracy per Class",
+      "type": "barchart",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 10, "w": 18, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT eval_start as time, accuracy_motorbike_pct as \"Motorbike\", accuracy_car_pct as \"Car\", accuracy_truck_pct as \"Truck\", accuracy_bus_pct as \"Bus\" FROM accuracy_evaluations ORDER BY eval_start DESC LIMIT 5",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Accuracy Logs",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT eval_start, eval_end, lighting_condition, evaluator_name, accuracy_overall_pct as \"Overall %\", manual_total, ai_total, notes FROM accuracy_evaluations ORDER BY eval_start DESC",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

@@ -1,0 +1,13 @@
+.env
+logs/
+backups/
+media/
+mosquitto/passwd
+mosquitto/data/
+mosquitto/log/
+nodered/node_modules/
+postgres-data/
+grafana-data/
+simulator/__pycache__/
+*.pyc
+nodered/flows_cred.json

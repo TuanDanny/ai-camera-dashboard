@@ -1,0 +1,53 @@
+{
+  "title": "Hardware Health",
+  "tags": ["hardware", "shtp"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU Temperature (°C)",
+      "type": "gauge",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT cpu_temp_c FROM hardware_metrics ORDER BY recorded_at DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 65 },
+              { "color": "red", "value": 80 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Hardware Metrics Over Time",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 10, "w": 18, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1m') AS \"time\", avg(cpu_temp_c) as \"CPU Temp\", avg(enclosure_temp_c) as \"Enclosure Temp\" FROM hardware_metrics WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

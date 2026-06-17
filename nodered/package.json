@@ -1,0 +1,9 @@
+{
+  "name": "shtp-node-red",
+  "description": "SHTP Traffic Server Node-RED dependencies",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-red-contrib-postgresql": "^0.13.0",
+    "node-red-contrib-telegrambot": "^15.1.4"
+  }
+}

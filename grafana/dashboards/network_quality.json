@@ -1,0 +1,54 @@
+{
+  "title": "Network Quality",
+  "tags": ["network", "shtp"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Signal Strength (RSSI dBm)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '5m') AS \"time\", avg(rssi_dbm) as \"RSSI\" FROM network_quality WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Network Latency (ms)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '5m') AS \"time\", avg(latency_ms) as \"Latency\" FROM network_quality WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Packet Loss & Reconnects",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '5m') AS \"time\", avg(packet_loss_pct) as \"Packet Loss %\", max(reconnect_count) as \"Reconnects\" FROM network_quality WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

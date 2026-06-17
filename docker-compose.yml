@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: shtp-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./logs/mosquitto:/mosquitto/log
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-u", "${MQTT_NODERED_USER}", "-P", "${MQTT_NODERED_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - shtp-net
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: shtp-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 1024m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - shtp-net
+
+  nodered:
+    image: nodered/node-red:3.1
+    container_name: shtp-nodered
+    environment:
+      TZ: ${TZ}
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./nodered:/data
+      - ./logs/nodered:/data/logs
+      - ./media:/media
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:1880/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - shtp-net
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: shtp-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      TZ: ${TZ}
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards_data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - shtp-net
+
+volumes:
+  postgres-data:
+  grafana-data:
+
+networks:
+  shtp-net:
+    driver: bridge

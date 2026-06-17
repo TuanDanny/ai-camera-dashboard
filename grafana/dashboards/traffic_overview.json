@@ -1,0 +1,39 @@
+{
+  "title": "Traffic Overview",
+  "tags": ["traffic", "shtp"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Vehicles Today",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1h'), sum(total_count) as \"Total\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Vehicles over Time",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 12, "w": 18, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1m') AS \"time\", sum(motorbike_count) as \"Motorbike\", sum(car_count) as \"Car\", sum(truck_count) as \"Truck\", sum(bus_count) as \"Bus\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}
