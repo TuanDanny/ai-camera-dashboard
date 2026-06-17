@@ -11,3 +11,4 @@ grafana-data/
 simulator/__pycache__/
 *.pyc
 nodered/flows_cred.json
+nodered/.npm/
