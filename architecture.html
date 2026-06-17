@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHTP System Architecture</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --edge-color: #475569;
+            --server-glow: #3b82f6;
+            --server-card: rgba(30, 41, 59, 0.7);
+            --mqtt-color: #8b5cf6;
+            --nodered-color: #ef4444;
+            --db-color: #336791;
+            --grafana-color: #f59e0b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at center, #1e293b 0%, #020617 100%);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            font-weight: 800;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p.subtitle {
+            color: #94a3b8;
+            margin-bottom: 50px;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .architecture-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            max-width: 1200px;
+            width: 100%;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+
+        /* --- SECTION STYLES --- */
+        .section {
+            padding: 30px;
+            border-radius: 20px;
+            position: relative;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .section-title {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-color);
+            padding: 5px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        /* --- EDGE TEAM (OUT OF SCOPE) --- */
+        .edge-section {
+            border: 2px dashed var(--edge-color);
+            background: rgba(15, 23, 42, 0.4);
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .edge-section:hover {
+            opacity: 0.9;
+        }
+
+        .edge-section .section-title {
+            color: #94a3b8;
+            border: 1px solid var(--edge-color);
+        }
+
+        .node-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* --- SERVER TEAM (IN SCOPE - HIGHLIGHTED) --- */
+        .server-section {
+            border: 2px solid rgba(59, 130, 246, 0.5);
+            background: var(--server-card);
+            box-shadow: 0 0 40px rgba(59, 130, 246, 0.15), inset 0 0 20px rgba(59, 130, 246, 0.1);
+            position: relative;
+            animation: pulse-glow 4s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.15), inset 0 0 20px rgba(59, 130, 246, 0.1); }
+            100% { box-shadow: 0 0 60px rgba(96, 165, 250, 0.3), inset 0 0 30px rgba(96, 165, 250, 0.2); }
+        }
+
+        .server-section .section-title {
+            color: #60a5fa;
+            border: 1px solid #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .server-grid {
+            display: grid;
+            grid-template-areas: 
+                "mqtt mqtt"
+                "nodered nodered"
+                "db grafana";
+            gap: 20px;
+        }
+
+        /* --- CARDS --- */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .edge-section .card {
+            filter: grayscale(100%);
+            cursor: default;
+        }
+
+        /* INTERACTIVE CARDS */
+        .server-section .card {
+            cursor: pointer;
+        }
+
+        .server-section .card::after {
+            content: 'Click to view flow';
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.1);
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            opacity: 0;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .server-section .card:hover {
+            transform: translateY(-5px) scale(1.02);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .server-section .card:hover::after {
+            bottom: 10px;
+            opacity: 1;
+        }
+
+        .card h3 {
+            margin: 10px 0 5px 0;
+            font-size: 1.1rem;
+        }
+
+        .card p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #94a3b8;
+        }
+
+        /* Specific Server Cards */
+        .card.mqtt { grid-area: mqtt; border-bottom: 3px solid var(--mqtt-color); }
+        .card.mqtt:hover { box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3); }
+        
+        .card.nodered { grid-area: nodered; border-bottom: 3px solid var(--nodered-color); }
+        .card.nodered:hover { box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
+        
+        .card.db { grid-area: db; border-bottom: 3px solid var(--db-color); }
+        .card.db:hover { box-shadow: 0 10px 30px rgba(51, 103, 145, 0.3); }
+        
+        .card.grafana { grid-area: grafana; border-bottom: 3px solid var(--grafana-color); }
+        .card.grafana:hover { box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3); }
+
+        /* Icon placeholders */
+        .icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        /* --- DATA STREAM (ANIMATED ARROW) --- */
+        .data-stream {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100px;
+            position: relative;
+        }
+
+        .stream-label {
+            font-size: 0.8rem;
+            color: #38bdf8;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        .stream-line {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            position: relative;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 30px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, #38bdf8, transparent);
+            box-shadow: 0 0 10px #38bdf8;
+            animation: flow 1.5s infinite linear;
+        }
+
+        .particle:nth-child(2) { animation-delay: 0.5s; }
+        .particle:nth-child(3) { animation-delay: 1.0s; }
+
+        @keyframes flow {
+            0% { left: -30px; }
+            100% { left: 100%; }
+        }
+
+        /* Legend */
+        .legend {
+            margin-top: 50px;
+            display: flex;
+            gap: 30px;
+            font-size: 0.9rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .lc-edge { background: rgba(15, 23, 42, 0.8); border: 1px dashed #475569; }
+        .lc-server { background: rgba(30, 41, 59, 0.8); border: 1px solid #3b82f6; box-shadow: 0 0 8px #3b82f6; }
+
+        /* --- MODAL (POPUP) STYLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            transform: translateY(20px) scale(0.95);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .modal-overlay.active .modal {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover {
+            color: #f8fafc;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .modal-header .icon {
+            margin: 0;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .modal-title {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #f8fafc;
+        }
+
+        .modal-body {
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .flow-step {
+            display: flex;
+            margin-bottom: 15px;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid currentColor;
+        }
+
+        .flow-number {
+            font-weight: 800;
+            font-size: 1.2rem;
+            margin-right: 15px;
+            opacity: 0.5;
+        }
+
+        .flow-text strong {
+            color: #f8fafc;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 900px) {
+            .architecture-container {
+                flex-direction: column;
+            }
+            .data-stream {
+                transform: rotate(90deg);
+                margin: 40px 0;
+            }
+            .stream-label {
+                transform: translateY(-20px) rotate(-90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SHTP Traffic System Architecture</h1>
+    <p class="subtitle">Visualizing the responsibility boundaries between the Edge Team and Server Team</p>
+
+    <div class="architecture-container">
+        
+        <!-- EDGE TEAM SECTION -->
+        <div class="section edge-section">
+            <div class="section-title">Edge Team (Hardware & AI)</div>
+            
+            <div class="node-group">
+                <div class="card">
+                    <div class="icon">📷</div>
+                    <h3>IP Camera</h3>
+                    <p>RTSP Video Stream</p>
+                </div>
+                <div class="card">
+                    <div class="icon">🧠</div>
+                    <h3>Luckfox Pico</h3>
+                    <p>YOLO NPU Inference</p>
+                </div>
+                <div class="card">
+                    <div class="icon">⚡</div>
+                    <h3>ESP32</h3>
+                    <p>Watchdog & Network</p>
+                </div>
+                <div class="card">
+                    <div class="icon">📶</div>
+                    <h3>4G Module</h3>
+                    <p>Internet Connection</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ANIMATED DATA STREAM -->
+        <div class="data-stream">
+            <div class="stream-label">JSON over 4G</div>
+            <div class="stream-line">
+                <div class="particle"></div>
+                <div class="particle"></div>
+                <div class="particle"></div>
+            </div>
+        </div>
+
+        <!-- SERVER TEAM SECTION -->
+        <div class="section server-section">
+            <div class="section-title">Server Team (Your Scope)</div>
+            
+            <div class="server-grid">
+                <div class="card mqtt" onclick="openModal('mqtt')">
+                    <div class="icon" style="color: var(--mqtt-color)">📫</div>
+                    <h3>Eclipse Mosquitto</h3>
+                    <p>MQTT Broker (Port 1883)<br>Receives JSON payloads</p>
+                </div>
+                <div class="card nodered" onclick="openModal('nodered')">
+                    <div class="icon" style="color: var(--nodered-color)">🔀</div>
+                    <h3>Node-RED</h3>
+                    <p>ETL Pipeline<br>Parses, Filters & Routes data</p>
+                </div>
+                <div class="card db" onclick="openModal('db')">
+                    <div class="icon" style="color: var(--db-color)">🗄️</div>
+                    <h3>PostgreSQL</h3>
+                    <p>Relational Database<br>Stores Traffic & Hardware logs</p>
+                </div>
+                <div class="card grafana" onclick="openModal('grafana')">
+                    <div class="icon" style="color: var(--grafana-color)">📊</div>
+                    <h3>Grafana</h3>
+                    <p>Dashboard UI<br>Real-time Visualization</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- LEGEND -->
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color lc-edge"></div>
+            <span>Other Teams (Out of scope)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color lc-server"></div>
+            <span style="color: #60a5fa; font-weight: 600;">Your Repository (Highlighted & Interactive)</span>
+        </div>
+    </div>
+
+    <!-- MODAL POPUP -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal(event)">&times;</button>
+            <div class="modal-header">
+                <div class="icon" id="modalIcon"></div>
+                <h2 class="modal-title" id="modalTitle">Component Title</h2>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const flowData = {
+            mqtt: {
+                title: "Eclipse Mosquitto (MQTT Broker)",
+                icon: "📫",
+                color: "var(--mqtt-color)",
+                steps: [
+                    { title: "Gateway Reception", text: "Acts as the 'Front Door'. It receives raw JSON payloads from the 4G modules of all Edge Stations simultaneously via Port 1883." },
+                    { title: "Authentication", text: "Verifies the username and hashed password of the incoming connections to ensure no unauthorized devices can send fake data." },
+                    { title: "Topic Routing", text: "Sorts the data into specific 'Topics' (e.g., traffic/station/ST-001/telemetry) so that subscribers know exactly what type of data has arrived." }
+                ]
+            },
+            nodered: {
+                title: "Node-RED (ETL Pipeline)",
+                icon: "🔀",
+                color: "var(--nodered-color)",
+                steps: [
+                    { title: "Data Ingestion (Extract)", text: "Constantly listens to Mosquitto. Whenever a new JSON payload arrives, Node-RED captures it immediately." },
+                    { title: "Processing (Transform)", text: "Checks the JSON structure, removes invalid data, deduplicates messages, and translates the JSON fields into secure SQL parameterized queries." },
+                    { title: "Database & Alerts (Load)", text: "Executes the SQL INSERT commands directly into PostgreSQL. If it detects a critical hardware alert (like Overheat), it triggers a webhook to send a Telegram message." }
+                ]
+            },
+            db: {
+                title: "PostgreSQL (Database)",
+                icon: "🗄️",
+                color: "var(--db-color)",
+                steps: [
+                    { title: "Persistent Storage", text: "Safely writes the structured traffic counts, camera statuses, and hardware metrics onto the persistent disk volume." },
+                    { title: "Data Integrity", text: "Enforces foreign keys, data types, and timestamps. It guarantees that if a camera sends invalid data (like text instead of numbers), it is rejected." },
+                    { title: "High-Speed Querying", text: "Indexes the time-series data so that when Grafana requests historical data from last month, it can return the results in milliseconds." }
+                ]
+            },
+            grafana: {
+                title: "Grafana (Dashboard UI)",
+                icon: "📊",
+                color: "var(--grafana-color)",
+                steps: [
+                    { title: "Real-time Polling", text: "Connects to PostgreSQL as a Read-Only data source and automatically executes SELECT queries every few seconds." },
+                    { title: "Data Visualization", text: "Transforms raw database numbers into beautiful, easy-to-understand bar charts, pie charts, gauges, and heatmaps." },
+                    { title: "Admin Interface", text: "Allows the SHTP administrators to filter data by Station ID, view hardware health, and export traffic reports to CSV files." }
+                ]
+            }
+        };
+
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalIcon = document.getElementById('modalIcon');
+        const modalBody = document.getElementById('modalBody');
+
+        function openModal(componentId) {
+            const data = flowData[componentId];
+            
+            modalTitle.innerText = data.title;
+            modalIcon.innerText = data.icon;
+            modalIcon.style.color = data.color;
+            
+            // Build flow steps HTML
+            let html = '';
+            data.steps.forEach((step, index) => {
+                html += `
+                    <div class="flow-step" style="color: ${data.color}">
+                        <div class="flow-number">${index + 1}</div>
+                        <div class="flow-text">
+                            <strong>${step.title}</strong>
+                            <span style="color: #cbd5e1">${step.text}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            modalBody.innerHTML = html;
+
+            modalOverlay.classList.add('active');
+        }
+
+        function closeModal(e) {
+            modalOverlay.classList.remove('active');
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>
