@@ -22,26 +22,26 @@ Built to be deployed on resource-constrained devices (like Raspberry Pi 4/5) or 
 ```mermaid
 graph LR
     subgraph "Edge Devices (Camera AI)"
-        Cam1[Camera ST-001]
-        Cam2[Camera ST-002]
-        CamN[Camera ST-NNN]
+        Cam1["Camera ST-001"]
+        Cam2["Camera ST-002"]
+        CamN["Camera ST-NNN"]
     end
 
     subgraph "Traffic Server (Dockerized)"
-        MQTT[Eclipse Mosquitto\n(MQTT Broker)]
-        NR[Node-RED\n(ETL & Logic)]
-        DB[(PostgreSQL\nDatabase)]
-        GF[Grafana\n(Dashboard)]
+        MQTT["Eclipse Mosquitto<br>(MQTT Broker)"]
+        NR["Node-RED<br>(ETL & Logic)"]
+        DB[("PostgreSQL<br>Database")]
+        GF["Grafana<br>(Dashboard)"]
         
-        MQTT -->|Raw JSON| NR
-        NR -->|Parsed SQL| DB
-        GF -->|Query| DB
+        MQTT -->|"Raw JSON"| NR
+        NR -->|"Parsed SQL"| DB
+        GF -->|"Query"| DB
     end
     
-    TG((Telegram Bot))
+    TG(("Telegram Bot"))
 
-    Cam1 & Cam2 & CamN -- MQTT (QoS 1) --> MQTT
-    NR -- Alerts --> TG
+    Cam1 & Cam2 & CamN -- "MQTT (QoS 1)" --> MQTT
+    NR -- "Alerts" --> TG
 ```
 
 ## ✨ Key Features
