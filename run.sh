@@ -14,6 +14,11 @@ chmod -R 777 grafana/data
 chmod -R 777 mosquitto/data
 chmod -R 777 mosquitto/log
 
+if [ ! -f "mosquitto/passwd" ]; then
+    echo "[INFO] mosquitto/passwd file not found. Creating from passwd.example..."
+    cp mosquitto/passwd.example mosquitto/passwd
+fi
+
 echo "[INFO] Launching Docker containers..."
 docker compose up -d
 
