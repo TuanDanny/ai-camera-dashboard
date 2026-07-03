@@ -12,6 +12,9 @@
             --edge-color: #475569;
             --server-glow: #3b82f6;
             --server-card: rgba(30, 41, 59, 0.7);
+            
+            --mediamtx-color: #06b6d4;
+            --ai-color: #10b981;
             --mqtt-color: #8b5cf6;
             --nodered-color: #ef4444;
             --db-color: #336791;
@@ -30,13 +33,14 @@
             align-items: center;
             justify-content: center;
             overflow-x: hidden;
+            padding: 20px;
         }
 
         h1 {
             font-weight: 800;
             font-size: 2.5rem;
             text-align: center;
-            margin-bottom: 10px;
+            margin: 0 0 10px 0;
             background: linear-gradient(to right, #60a5fa, #c084fc);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -44,19 +48,18 @@
 
         p.subtitle {
             color: #94a3b8;
-            margin-bottom: 50px;
+            margin: 0 0 40px 0;
             text-align: center;
             font-size: 1.1rem;
         }
 
         .architecture-container {
             display: flex;
-            align-items: center;
+            align-items: stretch;
             justify-content: center;
-            gap: 40px;
-            max-width: 1200px;
+            gap: 30px;
+            max-width: 1300px;
             width: 100%;
-            padding: 20px;
             flex-wrap: wrap;
         }
 
@@ -67,6 +70,9 @@
             position: relative;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .section-title {
@@ -74,7 +80,7 @@
             top: -15px;
             left: 50%;
             transform: translateX(-50%);
-            background: var(--bg-color);
+            background: #0b1329;
             padding: 5px 20px;
             border-radius: 20px;
             font-weight: 600;
@@ -82,18 +88,21 @@
             letter-spacing: 1px;
             text-transform: uppercase;
             white-space: nowrap;
+            border: 1px solid rgba(255,255,255,0.1);
         }
 
-        /* --- EDGE TEAM (OUT OF SCOPE) --- */
+        /* --- EDGE TEAM (OUT OF SCOPE - RASPI) --- */
         .edge-section {
             border: 2px dashed var(--edge-color);
             background: rgba(15, 23, 42, 0.4);
-            opacity: 0.6;
+            opacity: 0.7;
             transition: opacity 0.3s;
+            flex: 1 1 300px;
+            max-width: 350px;
         }
 
         .edge-section:hover {
-            opacity: 0.9;
+            opacity: 0.95;
         }
 
         .edge-section .section-title {
@@ -101,9 +110,9 @@
             border: 1px solid var(--edge-color);
         }
 
-        .node-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        .edge-nodes {
+            display: flex;
+            flex-direction: column;
             gap: 20px;
         }
 
@@ -114,6 +123,7 @@
             box-shadow: 0 0 40px rgba(59, 130, 246, 0.15), inset 0 0 20px rgba(59, 130, 246, 0.1);
             position: relative;
             animation: pulse-glow 4s infinite alternate;
+            flex: 2 1 700px;
         }
 
         @keyframes pulse-glow {
@@ -129,10 +139,8 @@
 
         .server-grid {
             display: grid;
-            grid-template-areas: 
-                "mqtt mqtt"
-                "nodered nodered"
-                "db grafana";
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: auto auto;
             gap: 20px;
         }
 
@@ -153,7 +161,7 @@
         }
 
         .edge-section .card {
-            filter: grayscale(100%);
+            filter: grayscale(40%);
             cursor: default;
         }
 
@@ -199,16 +207,22 @@
         }
 
         /* Specific Server Cards */
-        .card.mqtt { grid-area: mqtt; border-bottom: 3px solid var(--mqtt-color); }
+        .card.mediamtx { border-bottom: 3px solid var(--mediamtx-color); }
+        .card.mediamtx:hover { box-shadow: 0 10px 30px rgba(6, 182, 212, 0.3); }
+
+        .card.ai { border-bottom: 3px solid var(--ai-color); }
+        .card.ai:hover { box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3); }
+
+        .card.mqtt { border-bottom: 3px solid var(--mqtt-color); }
         .card.mqtt:hover { box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3); }
         
-        .card.nodered { grid-area: nodered; border-bottom: 3px solid var(--nodered-color); }
+        .card.nodered { border-bottom: 3px solid var(--nodered-color); }
         .card.nodered:hover { box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
         
-        .card.db { grid-area: db; border-bottom: 3px solid var(--db-color); }
+        .card.db { border-bottom: 3px solid var(--db-color); }
         .card.db:hover { box-shadow: 0 10px 30px rgba(51, 103, 145, 0.3); }
         
-        .card.grafana { grid-area: grafana; border-bottom: 3px solid var(--grafana-color); }
+        .card.grafana { border-bottom: 3px solid var(--grafana-color); }
         .card.grafana:hover { box-shadow: 0 10px 30px rgba(245, 158, 11, 0.3); }
 
         /* Icon placeholders */
@@ -225,23 +239,31 @@
         }
 
         /* --- DATA STREAM (ANIMATED ARROW) --- */
+        .stream-channels {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 30px;
+            width: 120px;
+        }
+
         .data-stream {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            width: 100px;
             position: relative;
         }
 
         .stream-label {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: #38bdf8;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             text-transform: uppercase;
             letter-spacing: 1px;
             text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+            text-align: center;
         }
 
         .stream-line {
@@ -267,6 +289,20 @@
         .particle:nth-child(2) { animation-delay: 0.5s; }
         .particle:nth-child(3) { animation-delay: 1.0s; }
 
+        .particle-purple {
+            position: absolute;
+            top: 0;
+            left: -20px;
+            width: 30px;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, var(--mqtt-color), transparent);
+            box-shadow: 0 0 10px var(--mqtt-color);
+            animation: flow 1.5s infinite linear;
+        }
+
+        .particle-purple:nth-child(2) { animation-delay: 0.5s; }
+        .particle-purple:nth-child(3) { animation-delay: 1.0s; }
+
         @keyframes flow {
             0% { left: -30px; }
             100% { left: 100%; }
@@ -274,10 +310,12 @@
 
         /* Legend */
         .legend {
-            margin-top: 50px;
+            margin-top: 40px;
             display: flex;
             gap: 30px;
             font-size: 0.9rem;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         
         .legend-item {
@@ -302,7 +340,7 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(2, 6, 23, 0.8);
+            background: rgba(2, 6, 23, 0.86);
             backdrop-filter: blur(5px);
             display: flex;
             align-items: center;
@@ -398,88 +436,118 @@
             margin-bottom: 5px;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 950px) {
             .architecture-container {
                 flex-direction: column;
+                align-items: center;
+            }
+            .edge-section {
+                max-width: 100%;
+                width: 100%;
+            }
+            .server-section {
+                width: 100%;
+            }
+            .server-grid {
+                grid-template-columns: 1fr;
+            }
+            .stream-channels {
+                flex-direction: row;
+                width: 100%;
+                margin: 20px 0;
             }
             .data-stream {
-                transform: rotate(90deg);
-                margin: 40px 0;
+                width: 50%;
             }
-            .stream-label {
-                transform: translateY(-20px) rotate(-90deg);
+            .stream-line {
+                width: 100%;
             }
         }
     </style>
 </head>
 <body>
 
-    <h1>SHTP Traffic System Architecture</h1>
-    <p class="subtitle">Visualizing the responsibility boundaries between the Edge Team and Server Team</p>
+    <h1>SHTP System Architecture</h1>
+    <p class="subtitle">Multi-Raspberry Pi Streaming & AI Processing Boundaries (Server-GPU Centric)</p>
 
     <div class="architecture-container">
         
         <!-- EDGE TEAM SECTION -->
         <div class="section edge-section">
-            <div class="section-title">Edge Team (Hardware & AI)</div>
+            <div class="section-title">Edge Station (Raspberry Pi)</div>
             
-            <div class="node-group">
+            <div class="edge-nodes">
                 <div class="card">
                     <div class="icon">📷</div>
-                    <h3>IP Camera</h3>
-                    <p>RTSP Video Stream</p>
+                    <h3>Camera (CSI / USB)</h3>
+                    <p>Raw Video Input</p>
                 </div>
                 <div class="card">
-                    <div class="icon">🧠</div>
-                    <h3>Luckfox Pico</h3>
-                    <p>YOLO NPU Inference</p>
-                </div>
-                <div class="card">
-                    <div class="icon">⚡</div>
-                    <h3>ESP32</h3>
-                    <p>Watchdog & Network</p>
+                    <div class="icon">📟</div>
+                    <h3>Raspberry Pi</h3>
+                    <p>Edge Camera Gateway<br>H.264 Encoder</p>
                 </div>
                 <div class="card">
                     <div class="icon">📶</div>
-                    <h3>4G Module</h3>
-                    <p>Internet Connection</p>
+                    <h3>Network (4G/Wi-Fi)</h3>
+                    <p>Pushes Stream & Heartbeat</p>
                 </div>
             </div>
         </div>
 
         <!-- ANIMATED DATA STREAM -->
-        <div class="data-stream">
-            <div class="stream-label">JSON over 4G</div>
-            <div class="stream-line">
-                <div class="particle"></div>
-                <div class="particle"></div>
-                <div class="particle"></div>
+        <div class="stream-channels">
+            <div class="data-stream">
+                <div class="stream-label">RTSP Video</div>
+                <div class="stream-line">
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                    <div class="particle"></div>
+                </div>
+            </div>
+            <div class="data-stream">
+                <div class="stream-label">Heartbeat</div>
+                <div class="stream-line">
+                    <div class="particle-purple"></div>
+                    <div class="particle-purple"></div>
+                    <div class="particle-purple"></div>
+                </div>
             </div>
         </div>
 
         <!-- SERVER TEAM SECTION -->
         <div class="section server-section">
-            <div class="section-title">Server Team (Your Scope)</div>
+            <div class="section-title">Central GPU Server (Your Repository)</div>
             
             <div class="server-grid">
+                <div class="card mediamtx" onclick="openModal('mediamtx')">
+                    <div class="icon" style="color: var(--mediamtx-color)">📺</div>
+                    <h3>MediaMTX</h3>
+                    <p>RTSP Media Server<br>Receives video streams</p>
+                </div>
+                <div class="card ai" onclick="openModal('ai')">
+                    <div class="icon" style="color: var(--ai-color)">🧠</div>
+                    <h3>AI Worker (GPU)</h3>
+                    <p>YOLO Detection / Tracking<br>Publishes JSON telemetry</p>
+                </div>
                 <div class="card mqtt" onclick="openModal('mqtt')">
                     <div class="icon" style="color: var(--mqtt-color)">📫</div>
-                    <h3>Eclipse Mosquitto</h3>
-                    <p>MQTT Broker (Port 1883)<br>Receives JSON payloads</p>
+                    <h3>Mosquitto</h3>
+                    <p>MQTT Broker<br>Coordinates Heartbeat & AI Data</p>
                 </div>
                 <div class="card nodered" onclick="openModal('nodered')">
                     <div class="icon" style="color: var(--nodered-color)">🔀</div>
                     <h3>Node-RED</h3>
-                    <p>ETL Pipeline<br>Parses, Filters & Routes data</p>
+                    <p>Data ETL Pipeline<br>Ingests, Deduplicates, Routes</p>
                 </div>
                 <div class="card db" onclick="openModal('db')">
                     <div class="icon" style="color: var(--db-color)">🗄️</div>
                     <h3>PostgreSQL</h3>
-                    <p>Relational Database<br>Stores Traffic & Hardware logs</p>
+                    <p>Database<br>Time-series logs & alerts</p>
                 </div>
                 <div class="card grafana" onclick="openModal('grafana')">
                     <div class="icon" style="color: var(--grafana-color)">📊</div>
-                    <h3>Grafana</h3>
+                    <h3>Grafana / Web</h3>
                     <p>Dashboard UI<br>Real-time Visualization</p>
                 </div>
             </div>
@@ -491,11 +559,11 @@
     <div class="legend">
         <div class="legend-item">
             <div class="legend-color lc-edge"></div>
-            <span>Other Teams (Out of scope)</span>
+            <span>Raspberry Pi Node (Out of server scope)</span>
         </div>
         <div class="legend-item">
             <div class="legend-color lc-server"></div>
-            <span style="color: #60a5fa; font-weight: 600;">Your Repository (Highlighted & Interactive)</span>
+            <span style="color: #60a5fa; font-weight: 600;">GPU Server Core Services (Your Repository - Interactive)</span>
         </div>
     </div>
 
@@ -515,14 +583,34 @@
 
     <script>
         const flowData = {
+            mediamtx: {
+                title: "MediaMTX (RTSP/HLS Media Server)",
+                icon: "📺",
+                color: "var(--mediamtx-color)",
+                steps: [
+                    { title: "Stream Ingestion", text: "Receives real-time H.264 encoded video feeds pushed from multiple Raspberry Pi edge gateways (e.g. ST-001, ST-002) via RTSP protocol." },
+                    { title: "Video Distribution", text: "Acts as a buffer. Serves incoming streams to the AI Workers for real-time analysis and makes streams available to the frontend (WebRTC/HLS) for live dashboard views." },
+                    { title: "Connection Management", text: "Allows automatic stream registration, handles reconnection, and monitors live stream path statuses." }
+                ]
+            },
+            ai: {
+                title: "AI Worker (GPU Engine)",
+                icon: "🧠",
+                color: "var(--ai-color)",
+                steps: [
+                    { title: "Frame Fetching", text: "Subscribes to video streams on MediaMTX by station_id and decodes frames at the configured FPS." },
+                    { title: "YOLO Inference & Tracking", text: "Runs deep-learning object detection (YOLOv8) on the GPU (CUDA) to identify vehicles (cars, motorbikes, trucks, buses) and applies tracking to count unique instances." },
+                    { title: "MQTT Telemetry", text: "Aggregates counting statistics every 10 seconds and publishes a structured telemetry JSON payload to the MQTT Broker." }
+                ]
+            },
             mqtt: {
                 title: "Eclipse Mosquitto (MQTT Broker)",
                 icon: "📫",
                 color: "var(--mqtt-color)",
                 steps: [
-                    { title: "Gateway Reception", text: "Acts as the 'Front Door'. It receives raw JSON payloads from the 4G modules of all Edge Stations simultaneously via Port 1883." },
-                    { title: "Authentication", text: "Verifies the username and hashed password of the incoming connections to ensure no unauthorized devices can send fake data." },
-                    { title: "Topic Routing", text: "Sorts the data into specific 'Topics' (e.g., traffic/station/ST-001/telemetry) so that subscribers know exactly what type of data has arrived." }
+                    { title: "Message Exchange", text: "Receives small telemetry JSONs from the AI Worker and periodic Hardware Heartbeats directly from the Raspberry Pi." },
+                    { title: "Topic Classification", text: "Sorts streams of messages into clean topics (e.g. traffic/station/ST-001/telemetry, traffic/station/ST-001/heartbeat)." },
+                    { title: "Command Downlink", text: "Allows the server (Node-RED) to send remote commands (reboot_device, restart_stream) down to specific Raspberry Pi edge nodes." }
                 ]
             },
             nodered: {
@@ -530,9 +618,9 @@
                 icon: "🔀",
                 color: "var(--nodered-color)",
                 steps: [
-                    { title: "Data Ingestion (Extract)", text: "Constantly listens to Mosquitto. Whenever a new JSON payload arrives, Node-RED captures it immediately." },
-                    { title: "Processing (Transform)", text: "Checks the JSON structure, removes invalid data, deduplicates messages, and translates the JSON fields into secure SQL parameterized queries." },
-                    { title: "Database & Alerts (Load)", text: "Executes the SQL INSERT commands directly into PostgreSQL. If it detects a critical hardware alert (like Overheat), it triggers a webhook to send a Telegram message." }
+                    { title: "Subscription", text: "Constantly listens to all telemetry, heartbeat, and alert topics from the MQTT Broker." },
+                    { title: "Parsing & Validation", text: "Validates JSON structure, filters duplicates, maps variables, and translates data into secure SQL insert statements." },
+                    { title: "Loading & Alerts", text: "Performs bulk inserts into PostgreSQL. Triggers critical alerts and forwards them to Telegram if hardware values exceed thresholds (e.g., Pi temperature > 80°C)." }
                 ]
             },
             db: {
@@ -540,19 +628,19 @@
                 icon: "🗄️",
                 color: "var(--db-color)",
                 steps: [
-                    { title: "Persistent Storage", text: "Safely writes the structured traffic counts, camera statuses, and hardware metrics onto the persistent disk volume." },
-                    { title: "Data Integrity", text: "Enforces foreign keys, data types, and timestamps. It guarantees that if a camera sends invalid data (like text instead of numbers), it is rejected." },
-                    { title: "High-Speed Querying", text: "Indexes the time-series data so that when Grafana requests historical data from last month, it can return the results in milliseconds." }
+                    { title: "Structured Storage", text: "Saves vehicle records, hardware logs, watchdog signals, and network metrics on a persistent Docker volume." },
+                    { title: "Data Integrity", text: "Enforces foreign keys (referencing active station IDs) and constraints to verify all counts are non-negative." },
+                    { title: "Optimized Indexing", text: "Applies B-Tree indexing on timestamps and station IDs to speed up Grafana dashboard loading times." }
                 ]
             },
             grafana: {
-                title: "Grafana (Dashboard UI)",
+                title: "Grafana & Web Dashboard",
                 icon: "📊",
                 color: "var(--grafana-color)",
                 steps: [
-                    { title: "Real-time Polling", text: "Connects to PostgreSQL as a Read-Only data source and automatically executes SELECT queries every few seconds." },
-                    { title: "Data Visualization", text: "Transforms raw database numbers into beautiful, easy-to-understand bar charts, pie charts, gauges, and heatmaps." },
-                    { title: "Admin Interface", text: "Allows the SHTP administrators to filter data by Station ID, view hardware health, and export traffic reports to CSV files." }
+                    { title: "Data Querying", text: "Performs read-only SQL queries to display historical aggregate traffic and hardware metrics." },
+                    { title: "Real-time Metrics", text: "Visualizes vehicle counts, network latencies, and device status (online/offline) on visual dashboard widgets." },
+                    { title: "Layout Persistence", text: "Through the custom React wrapper, users can drag and drop visual panels and save their custom layout settings." }
                 ]
             }
         };

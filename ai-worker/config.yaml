@@ -1,0 +1,20 @@
+server:
+  mqtt_host: localhost
+  mqtt_port: 1883
+  mqtt_username: nodered_service
+  mqtt_password: NodeRedInternal2026!
+
+model:
+  path: yolov8n.pt
+  device: cpu
+  imgsz: 640
+  conf: 0.35
+
+streams:
+  - station_id: ST-001
+    url: rtsp://localhost:8554/ST-001
+    location_name: Cong D2
+
+publish:
+  interval_s: 10
+  topic_template: traffic/station/{station_id}/telemetry

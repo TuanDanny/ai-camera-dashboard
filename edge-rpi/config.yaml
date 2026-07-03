@@ -1,0 +1,32 @@
+station_id: ST-001
+
+server:
+  host: localhost
+  mqtt_port: 1883
+  mediamtx_rtsp_port: 8554
+
+mqtt:
+  username: edge_device
+  password: MqttEdge2026!
+  qos: 1
+  keepalive: 60
+
+camera:
+  type: webcam
+  device: /dev/video0
+  width: 1280
+  height: 720
+  fps: 25
+  bitrate: 2500000
+
+stream:
+  protocol: rtsp
+  path: ST-001
+  url: rtsp://localhost:8554/ST-001
+  reconnect_delay_s: 5
+
+heartbeat:
+  interval_s: 10
+
+network:
+  interface: wlan0
