@@ -434,29 +434,29 @@
         <!-- COLUMN 1: FIELD LAYER (EDGE STATION) -->
         <div class="column">
             <div class="column-header">
-                <div class="column-title">Field Layer</div>
-                <div class="column-subtitle">Raspberry Pi ST-00X Gateway</div>
+                <div class="column-title">Field Layer (Thin Edge)</div>
+                <div class="column-subtitle">Raspberry Pi (Zero-AI Streamer)</div>
             </div>
             
             <div class="card" id="card-cam" data-color="sky" onclick="openModal('cam')">
                 <div class="icon">📷</div>
-                <h3>Camera Module</h3>
+                <h3>Camera Input</h3>
                 <p>CSI Camera / USB Webcam Raw Video Frame Input</p>
             </div>
             <div class="card" id="card-rpi-encoder" data-color="sky" onclick="openModal('encoder')">
                 <div class="icon">📼</div>
-                <h3>H.264 Encoder</h3>
-                <p>GStreamer / FFmpeg Hardware-accelerated Stream</p>
+                <h3>Lightweight Streamer</h3>
+                <p>No AI Processing. Compresses and transmits H.264 video feed</p>
             </div>
             <div class="card" id="card-rpi-agent" data-color="sky" onclick="openModal('agent')">
                 <div class="icon">📶</div>
                 <h3>Edge Agent</h3>
-                <p>MQTT Status, Heartbeats, System & Network Metrics</p>
+                <p>Lightweight MQTT daemon for Heartbeat & HW metrics</p>
             </div>
             <div class="card" id="card-rpi-watchdog" data-color="red" onclick="openModal('rpi-watchdog')">
                 <div class="icon">🛡️</div>
-                <h3>Edge Watchdog</h3>
-                <p>Local Daemon, Process Restarts & Auto Self-Healing</p>
+                <h3>Local Watchdog</h3>
+                <p>Lightweight service monitor for auto-reconnection</p>
             </div>
         </div>
 
@@ -575,37 +575,36 @@
                 ]
             },
             encoder: {
-                title: "H.264 Video Encoder",
-                subtitle: "Field Layer - Stream Compressing",
+                title: "Lightweight Streamer",
+                subtitle: "Field Layer - Zero-AI Compressing",
                 icon: "📼",
                 color: "var(--sky-color)",
                 steps: [
-                    { title: "Hardware-Accelerated Encoding", text: "Utilizes the Raspberry Pi SoC video encoder block via GStreamer elements to encode raw frames to H.264 format, saving CPU bandwidth." },
-                    { title: "Dynamic Stream Parameters", text: "Supports changing video width, height, framerate (FPS), and bitrate through local config file updates." },
-                    { title: "RTSP Transmission Pipeline", text: "Pushes real-time stream via GStreamer or FFmpeg directly to the Central MediaMTX server." }
+                    { title: "Zero AI Processing", text: "Performs no local model inference, reserving 100% of Raspberry Pi's computational resources." },
+                    { title: "Hardware-Accelerated Encoding", text: "Uses the Raspberry Pi's on-chip hardware block to compress raw camera frames to H.264 format with minimal CPU load." },
+                    { title: "RTSP Video Transmission", text: "Streams the compressed H.264 video feed directly to the Central MediaMTX server." }
                 ]
             },
             agent: {
-                title: "Edge Agent (edge_agent.py)",
-                subtitle: "Field Layer - System Coordination",
+                title: "Lightweight Edge Agent",
+                subtitle: "Field Layer - Client Telemetry",
                 icon: "📶",
                 color: "var(--sky-color)",
                 steps: [
-                    { title: "Heartbeat Generation", text: "Publish a status JSON message to the central MQTT broker every 10 seconds to indicate the station is alive." },
-                    { title: "Hardware Telemetry Gathering", text: "Monitors local Raspberry Pi performance metrics (CPU temperature, available memory, disk usage, voltage)." },
-                    { title: "Network Diagnostics", text: "Pings server and reports network stats (latency, RSSI, and packet loss) via MQTT." }
+                    { title: "Status Reporting", text: "Sends periodic status/heartbeat JSON packets every 10 seconds to the MQTT Broker." },
+                    { title: "Hardware Metrics", text: "Reads basic system statistics like CPU temperature, memory, disk usage, and input voltage." },
+                    { title: "Minimal Footprint", text: "Runs as a tiny Python background script that uses minimal RAM and CPU." }
                 ]
             },
             'rpi-watchdog': {
-                title: "Edge Watchdog Service",
-                subtitle: "Field Layer - Fault-Tolerance & Self-Healing",
+                title: "Lightweight Local Watchdog",
+                subtitle: "Field Layer - Service Guard",
                 icon: "🛡️",
                 color: "var(--red-color)",
                 steps: [
-                    { title: "Stream Thread Monitoring", text: "Actively poll the status of the `camera_stream.service` using Python's subprocess controller." },
-                    { title: "Automated Service Recovery", text: "Should the streaming process freeze or exit (due to camera unplug or temporary error), the agent kills the old thread and restarts a fresh stream within 5 seconds." },
-                    { title: "Hardware Safety Guard", text: "Checks local temperature. If CPU goes beyond 80°C, triggers alert and safely restarts services or system if needed." },
-                    { title: "Superuser Command Execution", text: "Listens on command topic. Executes remote commands (`restart_stream` or `reboot_device`) instantly and reports execution feedback." }
+                    { title: "Service Status Polling", text: "Checks if the lightweight stream service is running correctly." },
+                    { title: "Auto Reconnection", text: "If the network drops or camera stream crashes, automatically triggers a restart of the stream script locally." },
+                    { title: "Command Listener", text: "Listens for remote command inputs (e.g. restart stream) from the Central GPU Server." }
                 ]
             },
             mediamtx: {
