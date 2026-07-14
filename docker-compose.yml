@@ -6,6 +6,7 @@ services:
     container_name: shtp-mosquitto
     ports:
       - "1883:1883"
+      - "9001:9001"
     volumes:
       - ./mosquitto:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
@@ -112,6 +113,15 @@ services:
       - "9997:9997"       # API
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml
+    restart: unless-stopped
+    networks:
+      - shtp-net
+
+  mqttx-web:
+    image: emqx/mqttx-web:latest
+    container_name: shtp-mqttx-web
+    ports:
+      - "8080:80"
     restart: unless-stopped
     networks:
       - shtp-net
