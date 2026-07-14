@@ -42,7 +42,11 @@ def generate_flows():
             "database": "shtp_traffic",
             "databaseFieldType": "str",
             "ssl": "false",
-            "sslFieldType": "bool"
+            "sslFieldType": "bool",
+            "user": "POSTGRES_USER",
+            "userFieldType": "env",
+            "password": "POSTGRES_PASSWORD",
+            "passwordFieldType": "env"
         },
         {
             "id": "telegram_bot",
@@ -66,7 +70,10 @@ def generate_flows():
             "certificate": "",
             "useselfsignedcertificate": False,
             "sslterminated": False,
-            "verboselogging": False
+            "verboselogging": False,
+            "credentials": {
+                "token": "${TELEGRAM_BOT_TOKEN}"
+            }
         }
     ]
 
@@ -164,36 +171,47 @@ return msg;"""
     # Let's write them both. Node-RED postgres node supports msg.query. We can use pg-pool or just multiple nodes.
     # To keep it simple, let's just insert traffic_records here and I will add a second pg insert node for hardware in telemetry.
     telemetry_sql = """var p = msg.payload;
-msg.query = `
-    INSERT INTO traffic_records (
+var msg1 = {
+    topic: msg.topic,
+    payload: msg.payload,
+    query: `INSERT INTO traffic_records (
         station_id, recorded_at, seq, interval_seconds, 
         motorbike_count, car_count, truck_count, bus_count, 
         bicycle_count, unknown_count, total_count, 
         avg_confidence, min_confidence, detections_raw, 
         detections_filtered, lighting_condition
-    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
-    
-    INSERT INTO hardware_metrics (
+    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,
+    params: [
+        p.station_id, p.timestamp, p.seq, p.interval_seconds, 
+        p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus, 
+        p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total, 
+        p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw, 
+        p.data.detections_filtered, p.data.lighting_condition
+    ]
+};
+var msg2 = {
+    topic: msg.topic,
+    payload: msg.payload,
+    query: `INSERT INTO hardware_metrics (
         station_id, recorded_at, cpu_temp_c, enclosure_temp_c, 
         input_voltage_v, signal_rssi_dbm, signal_quality_pct, 
         free_memory_kb, disk_usage_pct, fps, inference_ms
-    ) VALUES ($1, to_timestamp($2), $17, $18, $19, $20, $21, $22, $23, $24, $25);
-`;
-msg.params = [
-    p.station_id, p.timestamp, p.seq, p.interval_seconds, 
-    p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus, 
-    p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total, 
-    p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw, 
-    p.data.detections_filtered, p.data.lighting_condition,
-    p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm, 
-    p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms
-];
-return msg;"""
+    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11);`,
+    params: [
+        p.station_id, p.timestamp,
+        p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm, 
+        p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms
+    ]
+};
+return [[msg1, msg2]];"""
 
     add_pipeline("telemetry", "traffic/station/+/telemetry", True, telemetry_sql)
 
     # 2. Heartbeat
     heartbeat_sql = """var p = msg.payload;
+if (!p || !p.hardware) {
+    return null;
+}
 msg.query = `INSERT INTO hardware_metrics (
     station_id, recorded_at, uptime_seconds, cpu_temp_c, 
     enclosure_temp_c, input_voltage_v, signal_rssi_dbm, 
@@ -214,7 +232,7 @@ msg.params = [p.station_id, p.timestamp, p.severity, p.code, p.message, JSON.str
 // Chuẩn bị payload cho Telegram
 if (p.severity === 'critical' || p.severity === 'warning') {
     msg.telegram_payload = {
-        chatId: process.env.TELEGRAM_CHAT_ID,
+        chatId: env.get("TELEGRAM_CHAT_ID"),
         type: 'message',
         content: `🚨 **ALERT** 🚨\\nStation: ${p.station_id}\\nCode: ${p.code}\\nMessage: ${p.message}`
     };
@@ -302,7 +320,7 @@ return msg;"""
         "type": "function",
         "z": "tab1",
         "name": "Format Accuracy SQL",
-        "func": "var p = msg.payload;\nmsg.query = `INSERT INTO accuracy_evaluations (\n    station_id, eval_period_start, eval_period_end, evaluator_name, lighting_condition, auto_total, manual_total, accuracy_pct, false_positives, false_negatives, notes\n) VALUES ($1, to_timestamp($2), to_timestamp($3), $4, $5, $6, $7, $8, $9, $10, $11)`;\nmsg.params = [p.station_id, p.eval_start, p.eval_end, p.evaluator, p.lighting, p.auto_total, p.manual_total, p.accuracy_pct, p.false_positives, p.false_negatives, p.notes];\nreturn msg;",
+        "func": "var p = msg.payload;\nmsg.query = `INSERT INTO accuracy_evaluations (\n    station_id, eval_start, eval_end, lighting_condition, evaluator_name,\n    manual_motorbike, manual_car, manual_truck, manual_bus, manual_bicycle, manual_total,\n    ai_motorbike, ai_car, ai_truck, ai_bus, ai_bicycle, ai_total,\n    accuracy_overall_pct, accuracy_motorbike_pct, accuracy_car_pct, accuracy_truck_pct, accuracy_bus_pct,\n    notes\n) VALUES (\n    $1, to_timestamp($2), to_timestamp($3), $4, $5,\n    $6, $7, $8, $9, $10, $11,\n    $12, $13, $14, $15, $16, $17,\n    $18, $19, $20, $21, $22,\n    $23\n)`;\nmsg.params = [\n    p.station_id, p.eval_start, p.eval_end, p.lighting_condition, p.evaluator_name,\n    p.manual_motorbike, p.manual_car, p.manual_truck, p.manual_bus, p.manual_bicycle, p.manual_total,\n    p.ai_motorbike, p.ai_car, p.ai_truck, p.ai_bus, p.ai_bicycle, p.ai_total,\n    p.accuracy_overall_pct, p.accuracy_motorbike_pct, p.accuracy_car_pct, p.accuracy_truck_pct, p.accuracy_bus_pct,\n    p.notes\n];\nreturn msg;",
         "outputs": 1,
         "x": 400,
         "y": y_pos,

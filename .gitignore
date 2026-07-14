@@ -12,3 +12,15 @@ simulator/__pycache__/
 *.pyc
 nodered/flows_cred.json
 nodered/.npm/
+nodered/.config.json
+nodered/.config.runtime.json
+nodered/.config.users.json
+nodered/.*.backup
+nodered/backups/
+nodered/.config.runtime.json.backup
+nodered/.flows_cred.json.backup
+nodered/.config.nodes.json
+nodered/.config.nodes.json.backup
+nodered/.config.nodes.json*
+
+

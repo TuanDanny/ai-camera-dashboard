@@ -42,10 +42,14 @@ services:
       - shtp-net
 
   nodered:
-    image: nodered/node-red:3.1
+    image: nodered/node-red:latest-20
     container_name: shtp-nodered
     environment:
       TZ: ${TZ}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     ports:
       - "1880:1880"
     volumes:

@@ -3,7 +3,8 @@
   "description": "SHTP Traffic Server Node-RED dependencies",
   "version": "1.0.0",
   "dependencies": {
-    "node-red-contrib-postgresql": "^0.13.0",
+    "node-red-contrib-postgres": "~0.6.1",
+    "node-red-contrib-postgresql": "~0.15.4",
     "node-red-contrib-telegrambot": "^15.1.4"
   }
 }
