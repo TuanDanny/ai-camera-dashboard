@@ -311,6 +311,18 @@ msg.params = [p.station_id, p.timestamp, p.format, p.resolution, p.size_bytes, p
 return msg;"""
     add_pipeline("snapshot", "traffic/station/+/snapshot", False, snapshot_sql)
 
+    # 6b. AI Worker fast status pulse - fps/inference_ms only, published every
+    # publish.status_interval_s (default 3s) by ai-worker/main.py, completely
+    # independent of the vehicle-counting window (publish.interval_s, 10s) so
+    # a faster refresh here never affects counting accuracy.
+    ai_status_sql = """var p = msg.payload;
+msg.query = `INSERT INTO hardware_metrics (
+    station_id, recorded_at, fps, inference_ms
+) VALUES ($1, to_timestamp($2), $3, $4)`;
+msg.params = [p.station_id, p.timestamp, p.fps, p.inference_ms];
+return msg;"""
+    add_pipeline("ai_status", "traffic/station/+/ai_status", False, ai_status_sql)
+
     # 7. Accuracy HTTP Endpoint
     y_pos += 40
     flows.append({

@@ -33,6 +33,12 @@ MQTT_PORT = config['server']['mqtt_port']
 MQTT_USER = config['server']['mqtt_username']
 MQTT_PASS = config['server']['mqtt_password']
 PUBLISH_INTERVAL = config['publish']['interval_s']
+# Vehicle counting keeps its own longer window (PUBLISH_INTERVAL) so a slow
+# or stopped vehicle isn't recounted every few seconds - this separate,
+# faster pulse is only for fps/inference_ms, which have no such window
+# dependency and are safe to report as often as we like.
+STATUS_INTERVAL = config['publish'].get('status_interval_s', 3)
+STATUS_TOPIC_TEMPLATE = config['publish'].get('status_topic_template', 'traffic/station/{station_id}/ai_status')
 MODEL_PATH = config['model']['path']
 CONF_THRESH = config['model']['conf']
 IMGSZ = config['model']['imgsz']
@@ -83,6 +89,7 @@ def process_stream(stream_info):
     url = stream_info['url']
     location = stream_info['location_name']
     topic = config['publish']['topic_template'].format(station_id=station_id)
+    status_topic = STATUS_TOPIC_TEMPLATE.format(station_id=station_id)
 
     print(f"[INFO] Starting AI Worker Thread for {station_id} ({location}) -> Stream: {url}")
 
@@ -106,6 +113,7 @@ def process_stream(stream_info):
     interval_outbound = 0
 
     interval_start = time.time()
+    status_interval_start = time.time()
     seq = 0
 
     STREAM_RETRY_LIMIT = 5
@@ -175,8 +183,22 @@ def process_stream(stream_info):
                     classifier.cleanup_old_tracks(frame_index)
                     direction_counter.cleanup_old_tracks(frame_index)
 
-                    # Check if interval is up to publish stats
                     now = time.time()
+
+                    # Fast, independent pulse for live fps/inference_ms - does
+                    # not touch tracked_ids/interval_* (those stay on
+                    # PUBLISH_INTERVAL so vehicle counting is unaffected).
+                    if now - status_interval_start >= STATUS_INTERVAL:
+                        status_payload = {
+                            "station_id": station_id,
+                            "timestamp": int(now),
+                            "fps": round(fps, 1),
+                            "inference_ms": inference_ms
+                        }
+                        client.publish(status_topic, json.dumps(status_payload), qos=0)
+                        status_interval_start = now
+
+                    # Check if interval is up to publish stats
                     if now - interval_start >= PUBLISH_INTERVAL:
                         # Compile data
                         motorbike_cnt = len(tracked_ids["motorbike"])

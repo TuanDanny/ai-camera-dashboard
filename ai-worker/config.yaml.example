@@ -39,3 +39,7 @@ streams:
 publish:
   interval_s: 10
   topic_template: traffic/station/{station_id}/telemetry
+  # Nhip rieng, nhanh hon, chi cho fps/inference_ms - KHONG anh huong toi
+  # cua so dem xe (van dung interval_s o tren).
+  status_interval_s: 3
+  status_topic_template: traffic/station/{station_id}/ai_status

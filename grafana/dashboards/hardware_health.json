@@ -2,6 +2,7 @@
   "title": "Hardware Health",
   "tags": ["hardware", "shtp"],
   "timezone": "browser",
+  "refresh": "3s",
   "panels": [
     {
       "id": 1,
@@ -33,6 +34,35 @@
       }
     },
     {
+      "id": 3,
+      "title": "Current FPS",
+      "description": "Gia tri fps moi nhat tu ai-worker, cap nhat moi publish.status_interval_s giay (mac dinh 3s) - doc lap voi cua so dem xe.",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT fps FROM hardware_metrics WHERE fps IS NOT NULL ORDER BY recorded_at DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 3 },
+              { "color": "green", "value": 6 }
+            ]
+          }
+        }
+      }
+    },
+    {
       "id": 2,
       "title": "Hardware Metrics Over Time",
       "type": "timeseries",
@@ -46,8 +76,23 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 4,
+      "title": "FPS Over Time",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 10 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '10s') AS \"time\", avg(fps) as \"FPS\", avg(inference_ms) as \"Inference (ms)\" FROM hardware_metrics WHERE $__timeFilter(recorded_at) AND fps IS NOT NULL GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,
-  "version": 1
+  "version": 3
 }

@@ -2,6 +2,7 @@
   "title": "Accuracy Report",
   "tags": ["accuracy", "shtp"],
   "timezone": "browser",
+  "refresh": "3s",
   "panels": [
     {
       "id": 1,
@@ -63,5 +64,5 @@
     }
   ],
   "schemaVersion": 39,
-  "version": 1
+  "version": 2
 }
