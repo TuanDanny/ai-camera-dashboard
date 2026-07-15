@@ -8,7 +8,7 @@ datasources:
     database: shtp_traffic
     user: shtp
     secureJsonData:
-      password: "123"
+      password: "changeme"
     jsonData:
       sslmode: disable
       postgresVersion: 15

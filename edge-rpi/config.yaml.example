@@ -7,16 +7,16 @@ server:
 
 mqtt:
   username: edge_device
-  password: MqttEdge2026!
+  password: changeme
   qos: 1
   keepalive: 60
 
 camera:
   # Cac loai duoc ho tro: csi | webcam | ip_webcam (ip_webcam dung field url ben duoi)
-  type: ip_webcam
+  type: webcam
   device: /dev/video0
   # Chi dung khi camera la ip_webcam - lay tu man hinh Start server cua app IP Webcam
-  url: http://192.168.100.214:8080/video
+  url: http://192.168.1.100:8080/video
   width: 1280
   height: 720
   fps: 25

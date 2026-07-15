@@ -1,6 +1,13 @@
 import json
+import os
 
 def generate_flows():
+    # Read from the real environment (docker-compose sources .env into this
+    # container/process) rather than hardcoding a secret in this file, since
+    # this script and its output (nodered/flows.json) are version-controlled.
+    mqtt_nodered_user = os.environ.get("MQTT_NODERED_USER", "nodered_service")
+    mqtt_nodered_password = os.environ.get("MQTT_NODERED_PASSWORD", "changeme")
+
     flows = [
         {
             "id": "tab1",
@@ -31,8 +38,8 @@ def generate_flows():
             "willQos": "1",
             "willPayload": "offline",
             "credentials": {
-                "user": "nodered_service",
-                "password": "NodeRedInternal2026!"
+                "user": mqtt_nodered_user,
+                "password": mqtt_nodered_password
             }
         },
         {

@@ -2,7 +2,7 @@ server:
   mqtt_host: localhost
   mqtt_port: 1883
   mqtt_username: ai_worker
-  mqtt_password: AiWorkerInternal2026!
+  mqtt_password: changeme
 
 model:
   path: yolov8n.pt
