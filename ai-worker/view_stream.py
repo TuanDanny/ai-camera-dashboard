@@ -14,6 +14,7 @@ Nhan Q hoac ESC tren cua so de thoat.
 """
 import os
 import sys
+import time
 import yaml
 import cv2
 from ultralytics import YOLO
@@ -66,9 +67,19 @@ def main():
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     frame_index = 0
+    display_fps = 0.0
+    prev_time = time.perf_counter()
     print("[INFO] Nhan Q hoac ESC tren cua so de thoat.")
 
     for r in results:
+        now = time.perf_counter()
+        elapsed = now - prev_time
+        prev_time = now
+        current_fps = 1.0 / elapsed if elapsed > 0 else 0.0
+        # Lam muot FPS qua thoi gian, giong cach yolo_cam_live.py da lam,
+        # de khong nhay so lien tuc tung frame.
+        display_fps = current_fps if display_fps == 0 else display_fps * 0.85 + current_fps * 0.15
+
         frame_index += 1
         frame = r.orig_img.copy()
         active_count = 0
@@ -98,6 +109,10 @@ def main():
         cv2.putText(
             frame, f"Frame {frame_index} | Active tracks: {active_count}",
             (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
+        )
+        cv2.putText(
+            frame, f"FPS: {display_fps:.1f}",
+            (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
         )
         cv2.imshow(WINDOW_NAME, frame)
 
