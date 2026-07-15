@@ -6,9 +6,9 @@ datasources:
     access: proxy
     url: postgres:5432
     database: shtp_traffic
-    user: shtp_admin
+    user: shtp
     secureJsonData:
-      password: ShtpSecure2026!
+      password: "123"
     jsonData:
       sslmode: disable
       postgresVersion: 15

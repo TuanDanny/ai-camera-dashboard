@@ -26,7 +26,11 @@
         "closePayload": "offline",
         "willTopic": "traffic/server/status",
         "willQos": "1",
-        "willPayload": "offline"
+        "willPayload": "offline",
+        "credentials": {
+            "user": "nodered_service",
+            "password": "NodeRedInternal2026!"
+        }
     },
     {
         "id": "pg_db",
@@ -67,7 +71,10 @@
         "certificate": "",
         "useselfsignedcertificate": false,
         "sslterminated": false,
-        "verboselogging": false
+        "verboselogging": false,
+        "credentials": {
+            "token": "${TELEGRAM_BOT_TOKEN}"
+        }
     },
     {
         "id": "mqtt_in_telemetry",
@@ -106,7 +113,7 @@
         "type": "function",
         "z": "tab1",
         "name": "Format telemetry SQL",
-        "func": "var p = msg.payload;\nvar msg1 = {\n    topic: msg.topic,\n    payload: msg.payload,\n    query: `INSERT INTO traffic_records (\n        station_id, recorded_at, seq, interval_seconds, \n        motorbike_count, car_count, truck_count, bus_count, \n        bicycle_count, unknown_count, total_count, \n        avg_confidence, min_confidence, detections_raw, \n        detections_filtered, lighting_condition\n    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,\n    params: [\n        p.station_id, p.timestamp, p.seq, p.interval_seconds, \n        p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus, \n        p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total, \n        p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw, \n        p.data.detections_filtered, p.data.lighting_condition\n    ]\n};\nvar msg2 = {\n    topic: msg.topic,\n    payload: msg.payload,\n    query: `INSERT INTO hardware_metrics (\n        station_id, recorded_at, cpu_temp_c, enclosure_temp_c, \n        input_voltage_v, signal_rssi_dbm, signal_quality_pct, \n        free_memory_kb, disk_usage_pct, fps, inference_ms\n    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11);`,\n    params: [\n        p.station_id, p.timestamp,\n        p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm, \n        p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms\n    ]\n};\nreturn [[msg1, msg2]];",
+        "func": "var p = msg.payload;\nmsg.query = `\n    WITH ins_traffic AS (\n        INSERT INTO traffic_records (\n            station_id, recorded_at, seq, interval_seconds,\n            motorbike_count, car_count, truck_count, bus_count,\n            bicycle_count, unknown_count, total_count,\n            inbound_count, outbound_count,\n            avg_confidence, min_confidence, detections_raw,\n            detections_filtered, lighting_condition\n        ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)\n    )\n    INSERT INTO hardware_metrics (\n        station_id, recorded_at, cpu_temp_c, enclosure_temp_c,\n        input_voltage_v, signal_rssi_dbm, signal_quality_pct,\n        free_memory_kb, disk_usage_pct, fps, inference_ms\n    ) VALUES ($1, to_timestamp($2), $19, $20, $21, $22, $23, $24, $25, $26, $27);\n`;\nmsg.params = [\n    p.station_id, p.timestamp, p.seq, p.interval_seconds,\n    p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus,\n    p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total,\n    p.data.direction.inbound, p.data.direction.outbound,\n    p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw,\n    p.data.detections_filtered, p.data.lighting_condition,\n    p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm,\n    p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms\n];\nreturn msg;",
         "outputs": 1,
         "x": 550,
         "y": 100,
@@ -194,7 +201,7 @@
         "type": "function",
         "z": "tab1",
         "name": "Format alert SQL",
-        "func": "var p = msg.payload;\nmsg.query = `INSERT INTO device_alerts (\n    station_id, alert_at, severity, code, message, details\n) VALUES ($1, to_timestamp($2), $3, $4, $5, $6)`;\nmsg.params = [p.station_id, p.timestamp, p.severity, p.code, p.message, JSON.stringify(p.details || {})];\n// Chuẩn bị payload cho Telegram\nif (p.severity === 'critical' || p.severity === 'warning') {\n    msg.telegram_payload = {\n        chatId: env.get(\"TELEGRAM_CHAT_ID\"),\n        type: 'message',\n        content: `🚨 **ALERT** 🚨\\nStation: ${p.station_id}\\nCode: ${p.code}\\nMessage: ${p.message}`\n    };\n}\nreturn msg;",
+        "func": "var p = msg.payload;\nmsg.query = `INSERT INTO device_alerts (\n    station_id, alert_at, severity, code, message, details\n) VALUES ($1, to_timestamp($2), $3, $4, $5, $6)`;\nmsg.params = [p.station_id, p.timestamp, p.severity, p.code, p.message, JSON.stringify(p.details || {})];\n// Chu\u1ea9n b\u1ecb payload cho Telegram\nif (p.severity === 'critical' || p.severity === 'warning') {\n    msg.telegram_payload = {\n        chatId: env.get(\"TELEGRAM_CHAT_ID\"),\n        type: 'message',\n        content: `\ud83d\udea8 **ALERT** \ud83d\udea8\\nStation: ${p.station_id}\\nCode: ${p.code}\\nMessage: ${p.message}`\n    };\n}\nreturn msg;",
         "outputs": 1,
         "x": 350,
         "y": 260,
@@ -364,7 +371,7 @@
         "type": "function",
         "z": "tab1",
         "name": "Format snapshot SQL",
-        "func": "var p = msg.payload;\n// Giải mã base64 và lưu file (Trong thực tế Node-RED sẽ dùng file node, ở đây ta chỉ lưu metadata)\nmsg.query = `INSERT INTO snapshots (\n    station_id, captured_at, format, resolution, size_bytes, lighting_condition, file_path\n) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7)`;\nvar filename = `/media/${p.station_id}_${p.timestamp}.jpeg`;\nmsg.params = [p.station_id, p.timestamp, p.format, p.resolution, p.size_bytes, p.lighting_condition, filename];\nreturn msg;",
+        "func": "var p = msg.payload;\n// Gi\u1ea3i m\u00e3 base64 v\u00e0 l\u01b0u file (Trong th\u1ef1c t\u1ebf Node-RED s\u1ebd d\u00f9ng file node, \u1edf \u0111\u00e2y ta ch\u1ec9 l\u01b0u metadata)\nmsg.query = `INSERT INTO snapshots (\n    station_id, captured_at, format, resolution, size_bytes, lighting_condition, file_path\n) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7)`;\nvar filename = `/media/${p.station_id}_${p.timestamp}.jpeg`;\nmsg.params = [p.station_id, p.timestamp, p.format, p.resolution, p.size_bytes, p.lighting_condition, filename];\nreturn msg;",
         "outputs": 1,
         "x": 350,
         "y": 500,

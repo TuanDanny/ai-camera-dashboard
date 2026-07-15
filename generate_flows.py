@@ -29,7 +29,11 @@ def generate_flows():
             "closePayload": "offline",
             "willTopic": "traffic/server/status",
             "willQos": "1",
-            "willPayload": "offline"
+            "willPayload": "offline",
+            "credentials": {
+                "user": "nodered_service",
+                "password": "NodeRedInternal2026!"
+            }
         },
         {
             "id": "pg_db",
@@ -170,40 +174,41 @@ return msg;"""
     # Wait, the plan says hardware metrics are in telemetry. 
     # Let's write them both. Node-RED postgres node supports msg.query. We can use pg-pool or just multiple nodes.
     # To keep it simple, let's just insert traffic_records here and I will add a second pg insert node for hardware in telemetry.
+    # NOTE: node-red-contrib-postgresql runs client.query(query, params) whenever msg.params
+    # is non-empty, which forces Postgres' extended/prepared-statement protocol. That protocol
+    # rejects a query string containing more than one semicolon-separated command ("cannot
+    # insert multiple commands into a prepared statement"), so the two INSERTs below must be
+    # combined into a single statement via a data-modifying CTE instead of being two separate
+    # ";"-terminated statements.
     telemetry_sql = """var p = msg.payload;
-var msg1 = {
-    topic: msg.topic,
-    payload: msg.payload,
-    query: `INSERT INTO traffic_records (
-        station_id, recorded_at, seq, interval_seconds, 
-        motorbike_count, car_count, truck_count, bus_count, 
-        bicycle_count, unknown_count, total_count, 
-        avg_confidence, min_confidence, detections_raw, 
-        detections_filtered, lighting_condition
-    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`,
-    params: [
-        p.station_id, p.timestamp, p.seq, p.interval_seconds, 
-        p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus, 
-        p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total, 
-        p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw, 
-        p.data.detections_filtered, p.data.lighting_condition
-    ]
-};
-var msg2 = {
-    topic: msg.topic,
-    payload: msg.payload,
-    query: `INSERT INTO hardware_metrics (
-        station_id, recorded_at, cpu_temp_c, enclosure_temp_c, 
-        input_voltage_v, signal_rssi_dbm, signal_quality_pct, 
+msg.query = `
+    WITH ins_traffic AS (
+        INSERT INTO traffic_records (
+            station_id, recorded_at, seq, interval_seconds,
+            motorbike_count, car_count, truck_count, bus_count,
+            bicycle_count, unknown_count, total_count,
+            inbound_count, outbound_count,
+            avg_confidence, min_confidence, detections_raw,
+            detections_filtered, lighting_condition
+        ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    )
+    INSERT INTO hardware_metrics (
+        station_id, recorded_at, cpu_temp_c, enclosure_temp_c,
+        input_voltage_v, signal_rssi_dbm, signal_quality_pct,
         free_memory_kb, disk_usage_pct, fps, inference_ms
-    ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11);`,
-    params: [
-        p.station_id, p.timestamp,
-        p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm, 
-        p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms
-    ]
-};
-return [[msg1, msg2]];"""
+    ) VALUES ($1, to_timestamp($2), $19, $20, $21, $22, $23, $24, $25, $26, $27);
+`;
+msg.params = [
+    p.station_id, p.timestamp, p.seq, p.interval_seconds,
+    p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus,
+    p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total,
+    p.data.direction.inbound, p.data.direction.outbound,
+    p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw,
+    p.data.detections_filtered, p.data.lighting_condition,
+    p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm,
+    p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms
+];
+return msg;"""
 
     add_pipeline("telemetry", "traffic/station/+/telemetry", True, telemetry_sql)
 

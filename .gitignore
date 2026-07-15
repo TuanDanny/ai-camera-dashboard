@@ -23,4 +23,9 @@ nodered/.config.nodes.json
 nodered/.config.nodes.json.backup
 nodered/.config.nodes.json*
 
+# Local test fixtures for ai-worker (model weights, sample video) - kept locally only
+ai-worker/local_test/*.pt
+ai-worker/local_test/*.mkv
+ai-worker/local_test/*.mp4
+
 

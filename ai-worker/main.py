@@ -7,6 +7,9 @@ import yaml
 import cv2
 import paho.mqtt.client as mqtt
 
+from vehicle_classifier import VehicleClassifier
+from direction_counter import DirectionCounter
+
 # Check if ultralytics is available, fallback to mock if not
 try:
     from ultralytics import YOLO
@@ -27,6 +30,17 @@ MQTT_PASS = config['server']['mqtt_password']
 PUBLISH_INTERVAL = config['publish']['interval_s']
 MODEL_PATH = config['model']['path']
 CONF_THRESH = config['model']['conf']
+IMGSZ = config['model']['imgsz']
+IOU_THRESH = config['model']['iou']
+MAX_DET = config['model']['max_det']
+TARGET_CLASSES = config['model']['classes']
+TRACKER_CONFIG = os.path.join(os.path.dirname(__file__), config['model']['tracker_config'])
+
+LOCK_AFTER = config['classifier']['lock_after']
+CLASS_MIN_CONF = config['classifier']['class_min_conf']
+
+DEFAULT_Y_RATIO = config['direction']['default_y_ratio']
+DEFAULT_INBOUND_WHEN = config['direction']['default_inbound_when']
 
 # Mapping COCO class indices to SHTP vehicle categories
 # 0: person, 1: bicycle, 2: car, 3: motorcycle (motorbike), 5: bus, 7: truck
@@ -64,167 +78,225 @@ def process_stream(stream_info):
     url = stream_info['url']
     location = stream_info['location_name']
     topic = config['publish']['topic_template'].format(station_id=station_id)
-    
+
     print(f"[INFO] Starting AI Worker Thread for {station_id} ({location}) -> Stream: {url}")
-    
+
     # Initialize trackers
     # We maintain a set of tracked vehicle IDs seen in the current 10s interval
     tracked_ids = {cat: set() for cat in COCO_MAP.values()}
     tracked_ids["unknown"] = set()
-    
+
+    # One classifier per stream/thread - state is never shared across stations
+    classifier = VehicleClassifier(CLASS_MIN_CONF, LOCK_AFTER)
+
+    direction_cfg = stream_info.get('direction_line', {})
+    y_ratio = direction_cfg.get('y_ratio', DEFAULT_Y_RATIO)
+    inbound_when = direction_cfg.get('inbound_when', DEFAULT_INBOUND_WHEN)
+    direction_counter = DirectionCounter(y_ratio, inbound_when)
+
+    frame_index = 0
+    interval_confidences = []
+    detections_raw_count = 0
+    interval_inbound = 0
+    interval_outbound = 0
+
     interval_start = time.time()
     seq = 0
-    
-    if HAS_YOLO:
-        try:
-            # Load YOLO model (automatically downloads if not present)
-            model = YOLO(MODEL_PATH)
-            
-            # Select device: GPU (cuda) if available, otherwise CPU
-            device = 'cuda' if cv2.cuda.getCudaEnabledDeviceCount() > 0 else 'cpu'
-            print(f"[INFO] [{station_id}] Running YOLO on device: {device}")
-            
-            # Run tracker
-            results = model.track(
-                source=url,
-                persist=True,
-                stream=True,
-                conf=CONF_THRESH,
-                device=device,
-                verbose=False
-            )
-            
-            for r in results:
-                # Calculate processing stats
-                inference_ms = int(r.speed.get('inference', 0.0))
-                fps = 1000.0 / (sum(r.speed.values()) + 1e-6)
-                
-                boxes = r.boxes
-                if boxes is not None and boxes.is_track:
-                    for box in boxes:
-                        cls_id = int(box.cls[0].item())
-                        track_id = int(box.id[0].item())
-                        
-                        category = COCO_MAP.get(cls_id, "unknown")
-                        tracked_ids[category].add(track_id)
-                
-                # Check if interval is up to publish stats
-                now = time.time()
-                if now - interval_start >= PUBLISH_INTERVAL:
-                    # Compile data
-                    motorbike_cnt = len(tracked_ids["motorbike"])
-                    car_cnt = len(tracked_ids["car"])
-                    truck_cnt = len(tracked_ids["truck"])
-                    bus_cnt = len(tracked_ids["bus"])
-                    bicycle_cnt = len(tracked_ids["bicycle"])
-                    unknown_cnt = len(tracked_ids["unknown"])
-                    total_cnt = motorbike_cnt + car_cnt + truck_cnt + bus_cnt + bicycle_cnt + unknown_cnt
-                    
-                    payload = {
-                        "v": 1,
-                        "station_id": station_id,
-                        "timestamp": int(now),
-                        "seq": seq,
-                        "interval_seconds": PUBLISH_INTERVAL,
-                        "data": {
-                            "vehicles": {
-                                "motorbike": motorbike_cnt,
-                                "car": car_cnt,
-                                "truck": truck_cnt,
-                                "bus": bus_cnt,
-                                "bicycle": bicycle_cnt,
-                                "unknown": unknown_cnt
-                            },
-                            "total": total_cnt,
-                            "direction": {
-                                "inbound": total_cnt // 2 + total_cnt % 2,
-                                "outbound": total_cnt // 2
-                            },
-                            "avg_confidence": 0.85,
-                            "min_confidence": 0.55,
-                            "detections_raw": total_cnt * 2,
-                            "detections_filtered": total_cnt,
-                            "lighting_condition": "day" if 6 <= time.localtime().tm_hour < 18 else "night"
-                        },
-                        "status": {
-                            "fps": round(fps, 1),
-                            "inference_ms": inference_ms,
-                            "stream_status": "ok"
-                        }
-                    }
-                    
-                    client.publish(topic, json.dumps(payload), qos=1)
-                    print(f"[{station_id}] Published AI Telemetry (Total: {total_cnt})")
-                    
-                    # Reset interval
-                    tracked_ids = {cat: set() for cat in COCO_MAP.values()}
-                    tracked_ids["unknown"] = set()
-                    interval_start = now
-                    seq += 1
-                    
-        except Exception as e:
-            print(f"[ERROR] [{station_id}] YOLO processing failed: {e}")
-            # Fallback to simulation mode if stream crashes
-            HAS_YOLO_FALLBACK = False
-    else:
-        HAS_YOLO_FALLBACK = False
 
-    # SIMULATION MODE (Fallback if no YOLO or stream error)
-    if not HAS_YOLO or not HAS_YOLO_FALLBACK:
-        print(f"[INFO] [{station_id}] Running in Simulation Mode.")
-        import random
-        while True:
-            time.sleep(PUBLISH_INTERVAL)
-            now = time.time()
-            
-            # Generate random but realistic traffic counts
-            hour = time.localtime(now).tm_hour
-            base_count = 15 if (7 <= hour <= 9 or 16 <= hour <= 19) else 5
-            
-            motorbike = int(base_count * random.uniform(1.5, 3.0))
-            car = int(base_count * random.uniform(0.5, 1.2))
-            truck = int(base_count * random.uniform(0.1, 0.3))
-            bus = int(base_count * random.uniform(0.05, 0.15))
-            bicycle = random.randint(0, 3)
-            unknown = 0
-            total = motorbike + car + truck + bus + bicycle
-            
-            payload = {
-                "v": 1,
-                "station_id": station_id,
-                "timestamp": int(now),
-                "seq": seq,
-                "interval_seconds": PUBLISH_INTERVAL,
-                "data": {
-                    "vehicles": {
-                        "motorbike": motorbike,
-                        "car": car,
-                        "truck": truck,
-                        "bus": bus,
-                        "bicycle": bicycle,
-                        "unknown": unknown
-                    },
-                    "total": total,
-                    "direction": {
-                        "inbound": total // 2 + total % 2,
-                        "outbound": total // 2
-                    },
-                    "avg_confidence": round(random.uniform(0.82, 0.91), 2),
-                    "min_confidence": round(random.uniform(0.58, 0.68), 2),
-                    "detections_raw": total * 3,
-                    "detections_filtered": total,
-                    "lighting_condition": "day" if 6 <= hour < 18 else "night"
+    STREAM_RETRY_LIMIT = 5
+    STREAM_RETRY_BACKOFF_S = 5
+
+    if HAS_YOLO:
+        attempt = 0
+        while attempt < STREAM_RETRY_LIMIT:
+            attempt += 1
+            try:
+                # Load YOLO model (automatically downloads if not present)
+                model = YOLO(MODEL_PATH)
+
+                # Select device: GPU (cuda) if available, otherwise CPU
+                device = 'cuda' if cv2.cuda.getCudaEnabledDeviceCount() > 0 else 'cpu'
+                print(f"[INFO] [{station_id}] Running YOLO on device: {device} (attempt {attempt}/{STREAM_RETRY_LIMIT})")
+
+                # Run tracker
+                results = model.track(
+                    source=url,
+                    persist=True,
+                    stream=True,
+                    conf=CONF_THRESH,
+                    imgsz=IMGSZ,
+                    iou=IOU_THRESH,
+                    classes=TARGET_CLASSES,
+                    max_det=MAX_DET,
+                    tracker=TRACKER_CONFIG,
+                    device=device,
+                    verbose=False
+                )
+
+                for r in results:
+                    frame_index += 1
+
+                    # Calculate processing stats
+                    inference_ms = int(r.speed.get('inference', 0.0))
+                    fps = 1000.0 / (sum(r.speed.values()) + 1e-6)
+
+                    boxes = r.boxes
+                    if boxes is not None and boxes.is_track:
+                        frame_height = r.orig_shape[0]
+                        for box in boxes:
+                            cls_id = int(box.cls[0].item())
+                            track_id = int(box.id[0].item())
+                            confidence = float(box.conf[0].item())
+
+                            locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
+                            classifier.mark_seen(track_id, frame_index)
+
+                            category = COCO_MAP.get(locked_cls, "unknown")
+                            tracked_ids[category].add(track_id)
+
+                            interval_confidences.append(confidence)
+                            detections_raw_count += 1
+
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+                            centroid_y = (y1 + y2) / 2
+                            crossing = direction_counter.update(track_id, centroid_y, frame_height, frame_index)
+                            direction_counter.mark_seen(track_id, frame_index)
+
+                            if crossing == "inbound":
+                                interval_inbound += 1
+                            elif crossing == "outbound":
+                                interval_outbound += 1
+
+                    classifier.cleanup_old_tracks(frame_index)
+                    direction_counter.cleanup_old_tracks(frame_index)
+
+                    # Check if interval is up to publish stats
+                    now = time.time()
+                    if now - interval_start >= PUBLISH_INTERVAL:
+                        # Compile data
+                        motorbike_cnt = len(tracked_ids["motorbike"])
+                        car_cnt = len(tracked_ids["car"])
+                        truck_cnt = len(tracked_ids["truck"])
+                        bus_cnt = len(tracked_ids["bus"])
+                        bicycle_cnt = len(tracked_ids["bicycle"])
+                        unknown_cnt = len(tracked_ids["unknown"])
+                        total_cnt = motorbike_cnt + car_cnt + truck_cnt + bus_cnt + bicycle_cnt + unknown_cnt
+
+                        avg_confidence = round(sum(interval_confidences) / len(interval_confidences), 2) if interval_confidences else 0.0
+                        min_confidence = round(min(interval_confidences), 2) if interval_confidences else 0.0
+
+                        payload = {
+                            "v": 1,
+                            "station_id": station_id,
+                            "timestamp": int(now),
+                            "seq": seq,
+                            "interval_seconds": PUBLISH_INTERVAL,
+                            "data": {
+                                "vehicles": {
+                                    "motorbike": motorbike_cnt,
+                                    "car": car_cnt,
+                                    "truck": truck_cnt,
+                                    "bus": bus_cnt,
+                                    "bicycle": bicycle_cnt,
+                                    "unknown": unknown_cnt
+                                },
+                                "total": total_cnt,
+                                "direction": {
+                                    "inbound": interval_inbound,
+                                    "outbound": interval_outbound
+                                },
+                                "avg_confidence": avg_confidence,
+                                "min_confidence": min_confidence,
+                                "detections_raw": detections_raw_count,
+                                "detections_filtered": total_cnt,
+                                "lighting_condition": "day" if 6 <= time.localtime().tm_hour < 18 else "night"
+                            },
+                            "status": {
+                                "fps": round(fps, 1),
+                                "inference_ms": inference_ms,
+                                "stream_status": "ok"
+                            }
+                        }
+
+                        client.publish(topic, json.dumps(payload), qos=1)
+                        print(f"[{station_id}] Published AI Telemetry (Total: {total_cnt})")
+
+                        # Reset interval
+                        tracked_ids = {cat: set() for cat in COCO_MAP.values()}
+                        tracked_ids["unknown"] = set()
+                        interval_confidences = []
+                        detections_raw_count = 0
+                        interval_inbound = 0
+                        interval_outbound = 0
+                        interval_start = now
+                        seq += 1
+
+                # The tracker generator ended without raising - treat this the
+                # same as a dropped connection and retry instead of giving up.
+                print(f"[WARN] [{station_id}] Stream ended unexpectedly (attempt {attempt}/{STREAM_RETRY_LIMIT}).")
+
+            except Exception as e:
+                print(f"[ERROR] [{station_id}] YOLO processing failed (attempt {attempt}/{STREAM_RETRY_LIMIT}): {e}")
+
+            time.sleep(STREAM_RETRY_BACKOFF_S)
+
+        print(f"[ERROR] [{station_id}] Exceeded {STREAM_RETRY_LIMIT} retries for the real stream, switching to simulation mode.")
+
+    # SIMULATION MODE (fallback if ultralytics is missing, or retries above are exhausted)
+    print(f"[INFO] [{station_id}] Running in Simulation Mode.")
+    import random
+    while True:
+        time.sleep(PUBLISH_INTERVAL)
+        now = time.time()
+
+        # Generate random but realistic traffic counts
+        hour = time.localtime(now).tm_hour
+        base_count = 15 if (7 <= hour <= 9 or 16 <= hour <= 19) else 5
+
+        motorbike = int(base_count * random.uniform(1.5, 3.0))
+        car = int(base_count * random.uniform(0.5, 1.2))
+        truck = int(base_count * random.uniform(0.1, 0.3))
+        bus = int(base_count * random.uniform(0.05, 0.15))
+        bicycle = random.randint(0, 3)
+        unknown = 0
+        total = motorbike + car + truck + bus + bicycle
+
+        payload = {
+            "v": 1,
+            "station_id": station_id,
+            "timestamp": int(now),
+            "seq": seq,
+            "interval_seconds": PUBLISH_INTERVAL,
+            "data": {
+                "vehicles": {
+                    "motorbike": motorbike,
+                    "car": car,
+                    "truck": truck,
+                    "bus": bus,
+                    "bicycle": bicycle,
+                    "unknown": unknown
                 },
-                "status": {
-                    "fps": round(random.uniform(22.0, 26.0), 1),
-                    "inference_ms": random.randint(15, 35),
-                    "stream_status": "ok"
-                }
+                "total": total,
+                "direction": {
+                    "inbound": total // 2 + total % 2,
+                    "outbound": total // 2
+                },
+                "avg_confidence": round(random.uniform(0.82, 0.91), 2),
+                "min_confidence": round(random.uniform(0.58, 0.68), 2),
+                "detections_raw": total * 3,
+                "detections_filtered": total,
+                "lighting_condition": "day" if 6 <= hour < 18 else "night"
+            },
+            "status": {
+                "fps": round(random.uniform(22.0, 26.0), 1),
+                "inference_ms": random.randint(15, 35),
+                "stream_status": "ok"
             }
-            
-            client.publish(topic, json.dumps(payload), qos=1)
-            print(f"[{station_id}] [SIMULATION] Published AI Telemetry (Total: {total})")
-            seq += 1
+        }
+
+        client.publish(topic, json.dumps(payload), qos=1)
+        print(f"[{station_id}] [SIMULATION] Published AI Telemetry (Total: {total})")
+        seq += 1
 
 def main():
     threads = []
@@ -233,7 +305,7 @@ def main():
         t.daemon = True
         t.start()
         threads.append(t)
-        
+
     print("[INFO] AI Worker is running. Press Ctrl+C to exit.")
     try:
         while True:

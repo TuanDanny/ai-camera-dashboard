@@ -7,8 +7,29 @@ server:
 model:
   path: yolov8n.pt
   device: cpu
-  imgsz: 640
-  conf: 0.35
+  imgsz: 512
+  conf: 0.10
+  iou: 0.50
+  max_det: 60
+  classes: [1, 2, 3, 5, 7]
+  tracker_config: tracker/traffic_bytetrack.yaml
+
+classifier:
+  lock_after: 5
+  class_min_conf:
+    1: 0.12   # bicycle
+    2: 0.18   # car
+    3: 0.08   # motorcycle
+    5: 0.18   # bus
+    7: 0.18   # truck
+
+direction:
+  # Duong ao nam ngang o y_ratio * chieu cao khung hinh.
+  # inbound_when: "increasing" neu xe di chuyen xuong duoi khung hinh (y tang) la vao,
+  # "decreasing" neu nguoc lai. Tung tram co the override rieng bang khoa
+  # "direction_line" (cung 2 field nay) trong muc streams ben duoi.
+  default_y_ratio: 0.5
+  default_inbound_when: increasing
 
 streams:
   - station_id: ST-001
