@@ -239,19 +239,28 @@ def main():
     try:
         uptime_start = time.time()
         while True:
-            # Check stream health
+            # Check stream health. Read-only under the lock - start_video_stream()
+            # takes the same (non-reentrant) lock itself, so it must be called
+            # AFTER releasing this one, or the thread deadlocks on itself the
+            # first time a restart is actually needed.
             stream_ok = "ok"
+            needs_restart = False
             with stream_lock:
                 if stream_process:
                     status = stream_process.poll()
                     if status is not None:
                         # Process exited
                         stream_ok = "error"
-                        print(f"[WARN] Stream process exited with code {status}. Attempting restart...")
-                        # Auto restart
-                        start_video_stream()
+                        needs_restart = True
                 else:
+                    # Never started, or a previous restart attempt itself
+                    # failed - keep retrying instead of staying offline forever.
                     stream_ok = "offline"
+                    needs_restart = True
+
+            if needs_restart:
+                print(f"[WARN] Stream is not running (status: {stream_ok}). Attempting restart...")
+                start_video_stream()
             
             # Network stats are computed once per cycle and reused for both
             # the network_quality report and the signal fields in heartbeat.
