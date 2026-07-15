@@ -44,7 +44,7 @@
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT fps FROM hardware_metrics WHERE fps IS NOT NULL ORDER BY recorded_at DESC LIMIT 1",
+          "rawSql": "SELECT fps FROM hardware_metrics WHERE fps IS NOT NULL ORDER BY received_at DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -94,5 +94,5 @@
     }
   ],
   "schemaVersion": 39,
-  "version": 3
+  "version": 4
 }
