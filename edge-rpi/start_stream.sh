@@ -16,12 +16,13 @@ STATION_ID=$(get_config_val "station_id")
 SERVER_HOST=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "host:" | cut -d':' -f2- | tr -d ' "''')
 RTSP_PORT=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "mediamtx_rtsp_port:" | cut -d':' -f2- | tr -d ' "''')
 
-WIDTH=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')
-HEIGHT=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')
-FPS=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')
-BITRATE=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')
-CAMERA_TYPE=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')
-DEVICE=$(grep -A 6 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')
+WIDTH=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')
+HEIGHT=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')
+FPS=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')
+BITRATE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')
+CAMERA_TYPE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')
+DEVICE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')
+CAMERA_URL=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')
 
 RTSP_URL="rtsp://$SERVER_HOST:$RTSP_PORT/$STATION_ID"
 
@@ -41,6 +42,12 @@ elif [ "$CAMERA_TYPE" == "webcam" ]; then
     # Check if webcam supports H264 hardware encoding directly, else transpile
     ffmpeg -re -f v4l2 -codec:v h264 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec copy -f rtsp -rtsp_transport tcp "$RTSP_URL" || \
     ffmpeg -re -f v4l2 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "$RTSP_URL"
+elif [ "$CAMERA_TYPE" == "ip_webcam" ]; then
+    # Android "IP Webcam" app - HTTP MJPEG source, always needs transcoding
+    # to H264 (no hardware passthrough possible from an MJPEG source).
+    echo "[INFO] Executing IP Webcam (phone) ffmpeg stream..."
+    echo "[INFO] Source: $CAMERA_URL"
+    ffmpeg -re -i "$CAMERA_URL" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -s "${WIDTH}x${HEIGHT}" -r "$FPS" -f rtsp -rtsp_transport tcp "$RTSP_URL"
 else
     # Fallback / Simulation test pattern
     echo "[INFO] Executing simulation test pattern stream..."

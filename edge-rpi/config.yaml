@@ -12,8 +12,11 @@ mqtt:
   keepalive: 60
 
 camera:
-  type: webcam
+  # Cac loai duoc ho tro: csi | webcam | ip_webcam (ip_webcam dung field url ben duoi)
+  type: ip_webcam
   device: /dev/video0
+  # Chi dung khi camera la ip_webcam - lay tu man hinh Start server cua app IP Webcam
+  url: http://192.168.100.214:8080/video
   width: 1280
   height: 720
   fps: 25

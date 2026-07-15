@@ -27,5 +27,7 @@ nodered/.config.nodes.json*
 ai-worker/local_test/*.pt
 ai-worker/local_test/*.mkv
 ai-worker/local_test/*.mp4
+ai-worker/*.pt
+ai-worker/.venv/
 
 
