@@ -9,7 +9,7 @@ from direction_counter import DirectionCounter  # noqa: E402
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 VIDEO = os.path.join(BASE, "traffic-test-30s.mkv")
-MODEL_PATH = os.path.join(BASE, "yolov8n.pt")
+MODEL_PATH = os.path.join(BASE, "yolov8n_ncnn_model")
 
 with open(os.path.join(AI_WORKER_DIR, "config.yaml")) as f:
     config = yaml.safe_load(f)

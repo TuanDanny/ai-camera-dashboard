@@ -24,10 +24,10 @@ nodered/.config.nodes.json.backup
 nodered/.config.nodes.json*
 
 # Local test fixtures for ai-worker (model weights, sample video) - kept locally only
-ai-worker/local_test/*.pt
+ai-worker/local_test/yolov8n_ncnn_model/
 ai-worker/local_test/*.mkv
 ai-worker/local_test/*.mp4
-ai-worker/*.pt
+ai-worker/yolov8n_ncnn_model/
 ai-worker/.venv/
 
 # Real device/service configs contain live credentials - only the

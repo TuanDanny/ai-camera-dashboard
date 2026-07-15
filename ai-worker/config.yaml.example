@@ -5,7 +5,7 @@ server:
   mqtt_password: changeme
 
 model:
-  path: yolov8n.pt
+  path: yolov8n_ncnn_model
   device: cpu
   imgsz: 512
   conf: 0.10
