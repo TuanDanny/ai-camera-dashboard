@@ -48,6 +48,7 @@ sudo docker compose up -d
 echo "[INFO] Waiting a few seconds for Mosquitto/Postgres to settle before starting the edge/AI processes..."
 sleep 5
 
+PROCESSES_STARTED=false
 AI_WORKER_VENV="$DIR/ai-worker/.venv/bin/python3"
 if [ ! -x "$AI_WORKER_VENV" ]; then
     echo ""
@@ -81,6 +82,7 @@ else
         (cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
         echo "       Tail them with: tail -f '$EDGE_LOG' '$AI_LOG'"
     fi
+    PROCESSES_STARTED=true
 fi
 
 echo ""
@@ -91,3 +93,21 @@ echo " - Grafana Dashboard: http://localhost:3000 (see .env for admin login)"
 echo " - Node-RED Flow:     http://localhost:1880"
 echo " - MQTT Broker:       localhost:1883"
 echo "========================================================="
+
+if [ "$PROCESSES_STARTED" = true ]; then
+    echo ""
+    read -p "Ban co muon mo view_stream.py de xem truc tiep stream dang duoc AI xu ly khong? (y/N): " SHOW_STREAM
+    if [[ "$SHOW_STREAM" =~ ^[Yy]$ ]]; then
+        YOLO_CAM_VENV="/home/shtp/yolo-cam/.venv/bin/python3"
+        if [ -z "$DISPLAY" ]; then
+            echo "[WARN] Khong phat hien man hinh do hoa (bien DISPLAY trong) - view_stream.py can giao dien GUI de hien cua so video, khong mo duoc qua SSH thuan. Bo qua."
+        elif [ ! -x "$YOLO_CAM_VENV" ]; then
+            echo "[WARN] Khong tim thay $YOLO_CAM_VENV - view_stream.py can mot python co opencv ho tro GUI (ai-worker/.venv dung ban headless, khong du). Xem huong dan trong dau file view_stream.py."
+        else
+            echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
+            sleep 3
+            echo "[INFO] Nhan Q hoac ESC tren cua so video de dong va tiep tuc."
+            (cd "$DIR/ai-worker" && "$YOLO_CAM_VENV" view_stream.py)
+        fi
+    fi
+fi
