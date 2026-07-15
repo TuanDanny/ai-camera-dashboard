@@ -32,9 +32,16 @@ echo "[INFO] Resolution: ${WIDTH}x${HEIGHT} @ ${FPS}fps"
 echo "[INFO] Camera Type: $CAMERA_TYPE"
 
 if [ "$CAMERA_TYPE" == "csi" ]; then
-    # CSI Camera (using libcamera-vid)
-    echo "[INFO] Executing libcamera-vid stream..."
-    libcamera-vid -t 0 --inline --width "$WIDTH" --height "$HEIGHT" --framerate "$FPS" --bitrate "$BITRATE" -o - | \
+    # CSI Camera - rpicam-vid is the current tool name (rpicam-apps package,
+    # Bookworm/Trixie); libcamera-vid is the old name still found on some
+    # older Bullseye installs. Prefer whichever is actually installed.
+    CSI_BIN=$(command -v rpicam-vid || command -v libcamera-vid)
+    if [ -z "$CSI_BIN" ]; then
+        echo "[ERROR] Khong tim thay rpicam-vid hay libcamera-vid. Cai dat goi rpicam-apps truoc (sudo apt install rpicam-apps)."
+        exit 1
+    fi
+    echo "[INFO] Executing $CSI_BIN stream..."
+    "$CSI_BIN" -t 0 --inline --width "$WIDTH" --height "$HEIGHT" --framerate "$FPS" --bitrate "$BITRATE" -o - | \
     ffmpeg -re -i - -vcodec copy -an -f rtsp -rtsp_transport tcp "$RTSP_URL"
 elif [ "$CAMERA_TYPE" == "webcam" ]; then
     # USB Webcam (using ffmpeg)
