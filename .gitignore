@@ -29,6 +29,7 @@ ai-worker/local_test/*.mkv
 ai-worker/local_test/*.mp4
 ai-worker/yolov8n_ncnn_model/
 ai-worker/.venv/
+ai-worker/.venv-view/
 
 # Real device/service configs contain live credentials - only the
 # *.example templates are tracked. Copy to the real filename and fill

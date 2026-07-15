@@ -98,16 +98,17 @@ if [ "$PROCESSES_STARTED" = true ]; then
     echo ""
     read -p "Ban co muon mo view_stream.py de xem truc tiep stream dang duoc AI xu ly khong? (y/N): " SHOW_STREAM
     if [[ "$SHOW_STREAM" =~ ^[Yy]$ ]]; then
-        YOLO_CAM_VENV="/home/shtp/yolo-cam/.venv/bin/python3"
+        VIEW_VENV="$DIR/ai-worker/.venv-view/bin/python3"
         if [ -z "$DISPLAY" ]; then
             echo "[WARN] Khong phat hien man hinh do hoa (bien DISPLAY trong) - view_stream.py can giao dien GUI de hien cua so video, khong mo duoc qua SSH thuan. Bo qua."
-        elif [ ! -x "$YOLO_CAM_VENV" ]; then
-            echo "[WARN] Khong tim thay $YOLO_CAM_VENV - view_stream.py can mot python co opencv ho tro GUI (ai-worker/.venv dung ban headless, khong du). Xem huong dan trong dau file view_stream.py."
+        elif [ ! -x "$VIEW_VENV" ]; then
+            echo "[WARN] Khong tim thay $VIEW_VENV - can venv rieng co opencv GUI cho view_stream.py. Cai 1 lan bang:"
+            echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml"
         else
             echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
             sleep 3
             echo "[INFO] Nhan Q hoac ESC tren cua so video de dong va tiep tuc."
-            (cd "$DIR/ai-worker" && "$YOLO_CAM_VENV" view_stream.py)
+            (cd "$DIR/ai-worker" && "$VIEW_VENV" view_stream.py)
         fi
     fi
 fi

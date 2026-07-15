@@ -4,11 +4,20 @@ dien, dung THAT su config.yaml + VehicleClassifier cua ai-worker (khong
 phai ban gia lap rieng). Khong publish MQTT, chi ve box + nhan len man hinh.
 
 Can chay bang mot python co opencv KHONG phai ban "headless" (ai-worker/
-.venv dung opencv-python-headless, khong ho tro cv2.imshow). yolo-cam/.venv
-da co san opencv co GUI (QT5) nen dung tam interpreter do de chay script nay:
+.venv dung opencv-python-headless, khong ho tro cv2.imshow). Dung venv
+rieng ai-worker/.venv-view (co opencv-python ban day du + torch cai qua
+pip, KHONG phai ban torch cua he thong - xem ghi chu ben duoi):
 
     cd ai-worker
-    /home/shtp/yolo-cam/.venv/bin/python3 view_stream.py
+    python3 -m venv .venv-view
+    .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml
+    .venv-view/bin/python3 view_stream.py
+
+Luu y: yolo-cam/.venv cung co opencv GUI nhung duoc tao voi
+--system-site-packages nen "torch" cua no thuc ra la ban apt cua he
+thong (cham hon ro ret tren ARM64 - do luong that: ~2.1fps so voi
+~10.4fps cua ban pip trong .venv-view, cung 1 model/tham so). Vi vay
+KHONG dung venv cua yolo-cam cho script nay.
 
 Nhan Q hoac ESC tren cua so de thoat.
 """
@@ -17,6 +26,10 @@ import sys
 import time
 import yaml
 import cv2
+import torch
+# Without this, torch's CPU backend does not use all available cores by
+# default - same fix as main.py, measured ~2.6x slower when left unset.
+torch.set_num_threads(os.cpu_count() or 4)
 from ultralytics import YOLO
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
