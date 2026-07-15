@@ -43,3 +43,7 @@ grafana/provisioning/datasources/postgres.yml
 nodered/flows.json
 
 
+
+# Host-side process logs from run.sh (headless fallback)
+edge-rpi/edge_agent.log
+ai-worker/ai_worker.log
