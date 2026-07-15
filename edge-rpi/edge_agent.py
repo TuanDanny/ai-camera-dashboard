@@ -30,10 +30,15 @@ HEARTBEAT_INTERVAL = config['heartbeat']['interval_s']
 TOPIC_HEARTBEAT = f"traffic/station/{STATION_ID}/heartbeat"
 TOPIC_COMMAND = f"traffic/station/{STATION_ID}/command"
 TOPIC_ALERT = f"traffic/station/{STATION_ID}/alert"
+TOPIC_NETWORK_QUALITY = f"traffic/station/{STATION_ID}/network_quality"
 
 # Global stream process reference
 stream_process = None
 stream_lock = threading.Lock()
+
+# Tracks MQTT reconnects for the network_quality report (reset each process start)
+_has_connected_once = False
+mqtt_reconnect_count = 0
 
 def get_cpu_temp():
     # Attempt to read Raspberry Pi CPU temperature
@@ -45,24 +50,29 @@ def get_cpu_temp():
         pass
     return 45.0  # Dummy fallback for simulation/Windows
 
-def get_hardware_stats():
+def get_hardware_stats(signal_rssi_dbm=None, signal_quality_pct=None):
     stats = {
         "cpu_temp_c": get_cpu_temp(),
+        "enclosure_temp_c": None,       # no separate enclosure sensor on this hardware
         "free_memory_kb": 1024 * 1024, # default dummy
         "disk_usage_pct": 10,           # default dummy
-        "input_voltage_v": 5.1
+        "input_voltage_v": 5.1,
+        "signal_rssi_dbm": signal_rssi_dbm,
+        "signal_quality_pct": signal_quality_pct,
+        "fps": None,                    # populated separately by ai-worker's own telemetry row
+        "inference_ms": None
     }
-    
+
     if psutil:
         try:
             mem = psutil.virtual_memory()
             stats["free_memory_kb"] = mem.available // 1024
-            
+
             disk = psutil.disk_usage('/')
             stats["disk_usage_pct"] = int(disk.percent)
         except Exception as e:
             print(f"Error reading psutil stats: {e}")
-            
+
     return stats
 
 def get_network_stats():
@@ -77,11 +87,33 @@ def get_network_stats():
         s.close()
     except Exception:
         latency = -1
-        
+
+    bytes_sent_total = 0
+    bytes_received_total = 0
+    if psutil:
+        try:
+            counters = psutil.net_io_counters()
+            bytes_sent_total = counters.bytes_sent
+            bytes_received_total = counters.bytes_recv
+        except Exception:
+            pass
+
     return {
-        "rssi_dbm": -65 if latency > 0 else -100,
+        # This station connects over WiFi, not a cellular modem, so the
+        # operator/cell-tower fields below don't apply and are left null.
+        "operator": "WiFi",
+        "technology": "wifi",
+        "band": None,
+        "rssi_dbm": -65 if latency >= 0 else -100,
+        "rsrp_dbm": None,
+        "rsrq_db": None,
+        "sinr_db": None,
         "latency_ms": latency,
-        "packet_loss_percent": 0.0 if latency > 0 else 100.0
+        "packet_loss_percent": 0.0 if latency >= 0 else 100.0,
+        "reconnect_count": 0,
+        "bytes_sent_total": bytes_sent_total,
+        "bytes_received_total": bytes_received_total,
+        "mqtt_reconnect_count": mqtt_reconnect_count
     }
 
 def start_video_stream():
@@ -132,7 +164,11 @@ def stop_video_stream():
         return False
 
 def on_connect(client, userdata, flags, rc):
+    global _has_connected_once, mqtt_reconnect_count
     if rc == 0:
+        if _has_connected_once:
+            mqtt_reconnect_count += 1
+        _has_connected_once = True
         print("[INFO] Connected to MQTT Broker successfully.")
         client.subscribe(TOPIC_COMMAND, qos=1)
         print(f"[INFO] Subscribed to topic: {TOPIC_COMMAND}")
@@ -217,6 +253,14 @@ def main():
                 else:
                     stream_ok = "offline"
             
+            # Network stats are computed once per cycle and reused for both
+            # the network_quality report and the signal fields in heartbeat.
+            network_stats = get_network_stats()
+            hardware_stats = get_hardware_stats(
+                signal_rssi_dbm=network_stats["rssi_dbm"],
+                signal_quality_pct=100 if network_stats["latency_ms"] >= 0 else 0
+            )
+
             # Prepare heartbeat payload
             heartbeat = {
                 "station_id": STATION_ID,
@@ -224,17 +268,29 @@ def main():
                 "status": "active",
                 "uptime_seconds": int(time.time() - uptime_start),
                 "stream_url": config['stream']['url'],
-                "hardware": get_hardware_stats(),
-                "network": get_network_stats(),
+                "hardware": hardware_stats,
+                # No physical watchdog MCU on this hardware yet - report OK
+                # as a placeholder rather than omitting the field, since
+                # Node-RED's heartbeat handler requires it to be present.
+                "watchdog": {"luckfox_ok": True, "esp32_ok": True},
                 "camera_status": "ok",
                 "stream_status": stream_ok,
                 "last_reboot_reason": "power_on"
             }
-            
+
             # Publish heartbeat
             client.publish(TOPIC_HEARTBEAT, json.dumps(heartbeat), qos=1)
             print(f"[Heartbeat] Sent status. Stream: {stream_ok}")
-            
+
+            # Publish network quality on its own topic - Node-RED subscribes
+            # to traffic/station/+/network_quality separately from heartbeat.
+            network_payload = {
+                "station_id": STATION_ID,
+                "timestamp": int(time.time()),
+                "network": network_stats
+            }
+            client.publish(TOPIC_NETWORK_QUALITY, json.dumps(network_payload), qos=1)
+
             time.sleep(HEARTBEAT_INTERVAL)
             
     except KeyboardInterrupt:
