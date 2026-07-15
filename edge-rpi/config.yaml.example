@@ -31,5 +31,13 @@ stream:
 heartbeat:
   interval_s: 10
 
+# Nguong de gui canh bao Telegram/DB - chi bao khi CHUYEN muc (binh thuong ->
+# warning/critical, hoac nguoc lai khi phuc hoi), khong spam moi heartbeat.
+alerts:
+  cpu_temp_warn_c: 65
+  cpu_temp_crit_c: 80
+  disk_usage_warn_pct: 90
+  disk_usage_crit_pct: 97
+
 network:
   interface: wlan0

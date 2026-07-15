@@ -43,3 +43,5 @@ publish:
   # cua so dem xe (van dung interval_s o tren).
   status_interval_s: 3
   status_topic_template: traffic/station/{station_id}/ai_status
+  # Canh bao mat/phuc hoi stream that (khong lien quan toi du lieu gia lap)
+  alert_topic_template: traffic/station/{station_id}/alert

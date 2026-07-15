@@ -26,6 +26,12 @@ MQTT_USER = config['mqtt']['username']
 MQTT_PASS = config['mqtt']['password']
 HEARTBEAT_INTERVAL = config['heartbeat']['interval_s']
 
+ALERTS_CFG = config.get('alerts', {})
+CPU_TEMP_WARN_C = ALERTS_CFG.get('cpu_temp_warn_c', 65)
+CPU_TEMP_CRIT_C = ALERTS_CFG.get('cpu_temp_crit_c', 80)
+DISK_USAGE_WARN_PCT = ALERTS_CFG.get('disk_usage_warn_pct', 90)
+DISK_USAGE_CRIT_PCT = ALERTS_CFG.get('disk_usage_crit_pct', 97)
+
 # MQTT Topics
 TOPIC_HEARTBEAT = f"traffic/station/{STATION_ID}/heartbeat"
 TOPIC_COMMAND = f"traffic/station/{STATION_ID}/command"
@@ -39,6 +45,11 @@ stream_lock = threading.Lock()
 # Tracks MQTT reconnects for the network_quality report (reset each process start)
 _has_connected_once = False
 mqtt_reconnect_count = 0
+
+# Tracks current level per metric so we only alert on a state CHANGE
+# (crossing into warning/critical, or recovering back to normal) instead of
+# spamming an alert every single heartbeat while a condition persists.
+_alert_levels = {"cpu_temp": "normal", "disk_usage": "normal"}
 
 def get_cpu_temp():
     # Attempt to read Raspberry Pi CPU temperature
@@ -163,6 +174,38 @@ def stop_video_stream():
             return True
         return False
 
+def publish_alert(client, severity, code, message, details=None):
+    payload = {
+        "station_id": STATION_ID,
+        "timestamp": int(time.time()),
+        "severity": severity,
+        "code": code,
+        "message": message,
+        "details": details or {}
+    }
+    client.publish(TOPIC_ALERT, json.dumps(payload), qos=1)
+
+def check_threshold_alert(client, metric_key, label, value, warn, crit, unit):
+    global _alert_levels
+    if value >= crit:
+        new_level = "critical"
+    elif value >= warn:
+        new_level = "warning"
+    else:
+        new_level = "normal"
+
+    old_level = _alert_levels[metric_key]
+    if new_level == old_level:
+        return
+    _alert_levels[metric_key] = new_level
+
+    if new_level == "normal":
+        publish_alert(client, "info", f"{metric_key}_normal",
+                      f"{label} da tro lai binh thuong ({value:.1f}{unit}).", {"value": value})
+    else:
+        publish_alert(client, new_level, f"{metric_key}_{new_level}",
+                      f"{label} dang o muc {new_level}: {value:.1f}{unit}.", {"value": value})
+
 def on_connect(client, userdata, flags, rc):
     global _has_connected_once, mqtt_reconnect_count
     if rc == 0:
@@ -269,6 +312,11 @@ def main():
                 signal_rssi_dbm=network_stats["rssi_dbm"],
                 signal_quality_pct=100 if network_stats["latency_ms"] >= 0 else 0
             )
+
+            check_threshold_alert(client, "cpu_temp", "Nhiet do CPU", hardware_stats["cpu_temp_c"],
+                                  CPU_TEMP_WARN_C, CPU_TEMP_CRIT_C, "C")
+            check_threshold_alert(client, "disk_usage", "Dung luong dia", hardware_stats["disk_usage_pct"],
+                                  DISK_USAGE_WARN_PCT, DISK_USAGE_CRIT_PCT, "%")
 
             # Prepare heartbeat payload
             heartbeat = {

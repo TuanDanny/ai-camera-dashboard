@@ -38,6 +38,7 @@ PUBLISH_INTERVAL = config['publish']['interval_s']
 # dependency and are safe to report as often as we like.
 STATUS_INTERVAL = config['publish'].get('status_interval_s', 3)
 STATUS_TOPIC_TEMPLATE = config['publish'].get('status_topic_template', 'traffic/station/{station_id}/ai_status')
+ALERT_TOPIC_TEMPLATE = config['publish'].get('alert_topic_template', 'traffic/station/{station_id}/alert')
 MODEL_PATH = config['model']['path']
 CONF_THRESH = config['model']['conf']
 IMGSZ = config['model']['imgsz']
@@ -73,6 +74,18 @@ def on_connect(client, userdata, flags, rc):
         print(f"[ERROR] Connection failed with code {rc}")
 
 client.on_connect = on_connect
+
+def publish_alert(station_id, severity, code, message, details=None):
+    alert_topic = ALERT_TOPIC_TEMPLATE.format(station_id=station_id)
+    payload = {
+        "station_id": station_id,
+        "timestamp": int(time.time()),
+        "severity": severity,
+        "code": code,
+        "message": message,
+        "details": details or {}
+    }
+    client.publish(alert_topic, json.dumps(payload), qos=1)
 
 # Connect to MQTT
 try:
@@ -122,6 +135,8 @@ def process_stream(stream_info):
         raise RuntimeError("'ultralytics' khong duoc cai dat - AI Worker can no de chay voi du lieu that.")
 
     attempt = 0
+    stream_down_alerted = False
+    got_frame = False
     while True:
         attempt += 1
         try:
@@ -147,8 +162,17 @@ def process_stream(stream_info):
                 verbose=False
             )
 
+            got_frame = False
             for r in results:
                 frame_index += 1
+
+                if not got_frame:
+                    got_frame = True
+                    attempt = 0
+                    if stream_down_alerted:
+                        publish_alert(station_id, "info", "stream_recovered",
+                                      f"Stream {station_id} da ket noi lai binh thuong.")
+                        stream_down_alerted = False
 
                 # Calculate processing stats
                 inference_ms = int(r.speed.get('inference', 0.0))
@@ -266,9 +290,14 @@ def process_stream(stream_info):
         except Exception as e:
             print(f"[ERROR] [{station_id}] YOLO processing failed (attempt {attempt}): {e}")
 
-        if attempt % STREAM_RETRY_LIMIT == 0:
+        if attempt > 0 and attempt % STREAM_RETRY_LIMIT == 0:
             print(f"[ERROR] [{station_id}] {STREAM_RETRY_LIMIT} lien tiep khong ket noi duoc stream that - "
                   f"kiem tra lai camera/nguon RTSP. Tiep tuc retry, KHONG phat sinh du lieu gia.")
+            if not stream_down_alerted:
+                publish_alert(station_id, "critical", "stream_offline",
+                              f"Stream {station_id} mat ket noi sau {attempt} lan thu lai lien tiep.",
+                              {"attempts": attempt})
+                stream_down_alerted = True
 
         time.sleep(STREAM_RETRY_BACKOFF_S)
 
