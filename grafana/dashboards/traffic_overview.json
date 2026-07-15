@@ -2,7 +2,7 @@
   "title": "Traffic Overview",
   "tags": ["traffic", "shtp"],
   "timezone": "browser",
-  "refresh": "3s",
+  "refresh": "10s",
   "panels": [
     {
       "id": 1,
@@ -20,11 +20,91 @@
       ]
     },
     {
+      "id": 5,
+      "title": "Total Motorbikes Today",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 5, "w": 4, "x": 6, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1h'), sum(motorbike_count) as \"Motorbike\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "orange" }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Total Cars Today",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 5, "w": 4, "x": 10, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1h'), sum(car_count) as \"Car\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Total Trucks Today",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 5, "w": 4, "x": 14, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1h'), sum(truck_count) as \"Truck\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "purple" }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Total Buses Today",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 5, "w": 4, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(recorded_at, '1h'), sum(bus_count) as \"Bus\" FROM traffic_records WHERE $__timeFilter(recorded_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" }
+        }
+      }
+    },
+    {
       "id": 2,
       "title": "Vehicles over Time",
       "type": "timeseries",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 12, "w": 18, "x": 6, "y": 0 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
       "targets": [
         {
           "format": "time_series",
@@ -36,5 +116,5 @@
     }
   ],
   "schemaVersion": 39,
-  "version": 2
+  "version": 4
 }
