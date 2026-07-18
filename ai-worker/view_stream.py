@@ -21,6 +21,7 @@ KHONG dung venv cua yolo-cam cho script nay.
 
 Nhan Q hoac ESC tren cua so de thoat.
 """
+import argparse
 import os
 import sys
 import time
@@ -53,16 +54,72 @@ STATION_ID = STREAM['station_id']
 COCO_MAP = {3: "motorbike", 2: "car", 7: "truck", 5: "bus", 1: "bicycle"}
 WINDOW_NAME = f"AI Worker live view - {STATION_ID}"
 
+_arg_parser = argparse.ArgumentParser()
+_arg_parser.add_argument(
+    "--backend", choices=["cpu", "hailo"], default=None,
+    help="Ep backend rieng cho view_stream.py, bo qua model.backend trong "
+         "config.yaml (dung khi muon xem song song voi main.py dang giu NPU hailo)."
+)
+_args = _arg_parser.parse_args()
+
+MODEL_BACKEND = _args.backend if _args.backend else config['model'].get('backend', 'cpu')
+HAILO_HEF_PATH = config['model'].get('hailo_hef_path', 'auto')
+
+# Import "tre" - xem giai thich trong main.py
+HAS_HAILO = False
+if MODEL_BACKEND == 'hailo':
+    try:
+        from pipeline.hailo_source import create_hailo, DEFAULT_HEF_PATH as _HAILO_DEFAULT_HEF
+        from pipeline.hailo_frame_source import hailo_frame_source
+        HAS_HAILO = True
+    except ImportError as e:
+        print(f"[WARN] --backend hailo nhung khong import duoc thu vien Hailo: {e}")
+
+    with open(TRACKER_CONFIG, 'r') as f:
+        _tracker_yaml = yaml.safe_load(f)
+    HAILO_TRACK_THRESH = _tracker_yaml.get('track_high_thresh', 0.25)
+    HAILO_TRACK_BUFFER = _tracker_yaml.get('track_buffer', 30)
+    HAILO_MATCH_THRESH = _tracker_yaml.get('match_thresh', 0.8)
+
 
 def main():
     classifier = VehicleClassifier(CLASS_MIN_CONF, LOCK_AFTER)
 
-    print(f"[INFO] Dang tai model: {MODEL_PATH}")
+    print(f"[INFO] Backend: {MODEL_BACKEND}")
     print(f"[INFO] Dang ket noi stream: {STREAM_URL}")
-    source = cpu_frame_source(
-        STATION_ID, STREAM_URL, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
-        TARGET_CLASSES, MAX_DET, TRACKER_CONFIG
-    )
+
+    if MODEL_BACKEND == 'hailo':
+        if not HAS_HAILO:
+            print("[ERROR] --backend hailo nhung khong import duoc thu vien Hailo - "
+                  "kiem tra lai venv co duoc wiring file .pth chua.")
+            return
+
+        hef_path = _HAILO_DEFAULT_HEF if HAILO_HEF_PATH == 'auto' else HAILO_HEF_PATH
+        try:
+            hailo_instance = create_hailo(hef_path)
+        except Exception as e:
+            if "OUT_OF_PHYSICAL_DEVICES" in str(e) or "not enough free devices" in str(e):
+                print(
+                    "[ERROR] Khong mo duoc NPU Hailo - dang co tien trinh khac (thuong la "
+                    "main.py) giu thiet bi roi. Hailo-8L chi co 1 device vat ly, khong the "
+                    "dung song song 2 tien trinh OS rieng biet cung mo NPU. Dung main.py "
+                    "truoc roi chay lai view_stream.py, hoac chay "
+                    "'view_stream.py --backend cpu' de xem cung luc voi main.py dang giu NPU."
+                )
+                return
+            raise
+        source = hailo_frame_source(
+            hailo_instance, STREAM_URL, TARGET_CLASSES, conf=CONF_THRESH,
+            buffer_size=1,
+            track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
+            match_thresh=HAILO_MATCH_THRESH,
+        )
+    else:
+        print(f"[INFO] Dang tai model: {MODEL_PATH}")
+        source = cpu_frame_source(
+            STATION_ID, STREAM_URL, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
+            TARGET_CLASSES, MAX_DET, TRACKER_CONFIG
+        )
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     frame_index = 0
@@ -114,6 +171,11 @@ def main():
         if key == ord('q') or key == 27:
             break
 
+    # Goi tuong minh source.close() truoc khi thoat - voi backend hailo,
+    # dam bao producer thread nen dung han truoc khi tra quyen dieu khien
+    # (xem npu_plan.md muc Buoc 4 - bug da phat hien: dong hailo_instance
+    # trong luc producer thread van chay se crash native).
+    source.close()
     cv2.destroyAllWindows()
     print("[INFO] Da dong.")
 
