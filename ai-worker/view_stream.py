@@ -56,9 +56,11 @@ WINDOW_NAME = f"AI Worker live view - {STATION_ID}"
 
 _arg_parser = argparse.ArgumentParser()
 _arg_parser.add_argument(
-    "--backend", choices=["cpu", "hailo"], default=None,
+    "--backend", choices=["cpu", "hailo", "relay"], default=None,
     help="Ep backend rieng cho view_stream.py, bo qua model.backend trong "
-         "config.yaml (dung khi muon xem song song voi main.py dang giu NPU hailo)."
+         "config.yaml. 'relay': KHONG tu chay YOLO, chi nhan lai ket qua "
+         "NPU da xu ly san tu main.py qua socket (nhe nhat, main.py phai "
+         "dang chay). 'cpu'/'hailo': tu chay YOLO rieng nhu truoc."
 )
 _args = _arg_parser.parse_args()
 
@@ -88,7 +90,14 @@ def main():
     print(f"[INFO] Backend: {MODEL_BACKEND}")
     print(f"[INFO] Dang ket noi stream: {STREAM_URL}")
 
-    if MODEL_BACKEND == 'hailo':
+    if MODEL_BACKEND == 'relay':
+        from pipeline.frame_broadcast import socket_frame_source
+        try:
+            source = socket_frame_source()
+        except RuntimeError as e:
+            print(f"[ERROR] {e}")
+            return
+    elif MODEL_BACKEND == 'hailo':
         if not HAS_HAILO:
             print("[ERROR] --backend hailo nhung khong import duoc thu vien Hailo - "
                   "kiem tra lai venv co duoc wiring file .pth chua.")
@@ -127,54 +136,62 @@ def main():
     prev_time = time.perf_counter()
     print("[INFO] Nhan Q hoac ESC tren cua so de thoat.")
 
-    for orig_frame, boxes, inference_ms, fps in source:
-        now = time.perf_counter()
-        elapsed = now - prev_time
-        prev_time = now
-        current_fps = 1.0 / elapsed if elapsed > 0 else 0.0
-        # Lam muot FPS qua thoi gian, giong cach yolo_cam_live.py da lam,
-        # de khong nhay so lien tuc tung frame.
-        display_fps = current_fps if display_fps == 0 else display_fps * 0.85 + current_fps * 0.15
+    # QUAN TRONG (che do relay): socket_frame_source() chi tao generator,
+    # CHUA ket noi gi ca cho toi khi bi iterate lan dau - nen loi mat ket
+    # noi (main.py chua chay, hoac bi tat giua luc dang xem) xay ra TRONG
+    # vong lap for ben duoi, khong phai o dong goi ham. Boc RuntimeError o
+    # day de bao loi ro rang thay vi traceback tho.
+    try:
+        for orig_frame, boxes, inference_ms, fps in source:
+            now = time.perf_counter()
+            elapsed = now - prev_time
+            prev_time = now
+            current_fps = 1.0 / elapsed if elapsed > 0 else 0.0
+            # Lam muot FPS qua thoi gian, giong cach yolo_cam_live.py da lam,
+            # de khong nhay so lien tuc tung frame.
+            display_fps = current_fps if display_fps == 0 else display_fps * 0.85 + current_fps * 0.15
 
-        frame_index += 1
-        frame = orig_frame.copy()
-        active_count = 0
+            frame_index += 1
+            frame = orig_frame.copy()
+            active_count = 0
 
-        for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
-            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+            for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
+                x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
-            locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
-            classifier.mark_seen(track_id, frame_index)
-            category = COCO_MAP.get(locked_cls, "unknown")
-            active_count += 1
+                locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
+                classifier.mark_seen(track_id, frame_index)
+                category = COCO_MAP.get(locked_cls, "unknown")
+                active_count += 1
 
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            label = f"ID {track_id} {category} {confidence:.2f}"
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                label = f"ID {track_id} {category} {confidence:.2f}"
+                cv2.putText(
+                    frame, label, (x1, max(y1 - 10, 20)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+                )
+
+            classifier.cleanup_old_tracks(frame_index)
+
             cv2.putText(
-                frame, label, (x1, max(y1 - 10, 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+                frame, f"Frame {frame_index} | Active tracks: {active_count}",
+                (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
             )
+            cv2.putText(
+                frame, f"FPS: {display_fps:.1f}",
+                (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
+            )
+            cv2.imshow(WINDOW_NAME, frame)
 
-        classifier.cleanup_old_tracks(frame_index)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:
+                break
+    except RuntimeError as e:
+        print(f"[ERROR] {e}")
 
-        cv2.putText(
-            frame, f"Frame {frame_index} | Active tracks: {active_count}",
-            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
-        )
-        cv2.putText(
-            frame, f"FPS: {display_fps:.1f}",
-            (20, 75), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
-        )
-        cv2.imshow(WINDOW_NAME, frame)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q') or key == 27:
-            break
-
-    # Goi tuong minh source.close() truoc khi thoat - voi backend hailo,
-    # dam bao producer thread nen dung han truoc khi tra quyen dieu khien
-    # (xem npu_plan.md muc Buoc 4 - bug da phat hien: dong hailo_instance
-    # trong luc producer thread van chay se crash native).
+    # Goi tuong minh source.close() truoc khi thoat - voi backend hailo/
+    # relay, dam bao producer/client thread nen dung han truoc khi tra
+    # quyen dieu khien (xem npu_plan.md muc Buoc 4 - bug da phat hien:
+    # dong tai nguyen trong luc thread van chay se crash native).
     source.close()
     cv2.destroyAllWindows()
     print("[INFO] Da dong.")

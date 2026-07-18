@@ -1,4 +1,3 @@
-import base64
 import json
 import os
 import socket
@@ -115,17 +114,23 @@ class FrameBroadcaster:
             if not ok:
                 continue
 
-            payload = {
+            # Khong con ma hoa base64 (tung lam anh JPEG phinh them ~33%
+            # kich thuoc + ton CPU ma hoa/giai ma that su o ca 2 dau - da do
+            # duoc day chinh la nguyen nhan chinh khien FPS hien thi chi dat
+            # ~20fps thay vi ~40-45fps cua NPU that). Gui rieng 2 phan:
+            # metadata JSON nho (khong co anh) + khoi JPEG nhi phan tho,
+            # moi phan tu co 4 byte dau ghi do dai.
+            meta = {
                 "station_id": station_id,
-                "jpeg_b64": base64.b64encode(jpeg_buf.tobytes()).decode('ascii'),
                 "boxes": [list(b) for b in boxes],
                 "inference_ms": inference_ms,
                 "fps": fps,
             }
-            body = json.dumps(payload).encode('utf-8')
-            header = struct.pack('>I', len(body))
+            meta_bytes = json.dumps(meta).encode('utf-8')
+            jpeg_bytes = jpeg_buf.tobytes()
             try:
-                conn.sendall(header + body)
+                _send_framed(conn, meta_bytes)
+                _send_framed(conn, jpeg_bytes)
             except OSError:
                 # Client mat ket noi/gui loi - dong lai, doi client sau ket
                 # noi lai qua _accept_loop. Khong raise - khong duoc lam
@@ -176,6 +181,22 @@ def _recv_exact(sock, n):
     return buf
 
 
+def _send_framed(conn, data):
+    """Gui 1 khoi du lieu voi 4 byte dau ghi do dai (length-prefixed
+    framing) - dung chung cho ca phan JSON metadata va phan JPEG nhi phan."""
+    conn.sendall(struct.pack('>I', len(data)) + data)
+
+
+def _recv_framed(sock):
+    """Doc 1 khoi du lieu duoc dong goi boi _send_framed(). Tra ve None
+    neu ket noi bi dong giua chung (EOF)."""
+    header = _recv_exact(sock, 4)
+    if header is None:
+        return None
+    length = struct.unpack('>I', header)[0]
+    return _recv_exact(sock, length)
+
+
 def socket_frame_source(socket_path=DEFAULT_SOCKET_PATH, connect_timeout=5.0):
     """Generator phia client: ket noi vao FrameBroadcaster dang chay trong
     main.py, nhan lien tuc, giai ma, yield (frame, boxes, inference_ms,
@@ -200,25 +221,24 @@ def socket_frame_source(socket_path=DEFAULT_SOCKET_PATH, connect_timeout=5.0):
 
     try:
         while True:
-            header = _recv_exact(sock, 4)
-            if header is None:
+            meta_bytes = _recv_framed(sock)
+            if meta_bytes is None:
                 raise RuntimeError(
                     "Mat ket noi toi main.py (co the main.py da bi tat) - "
                     "khong con nhan duoc du lieu qua socket nua."
                 )
-            body_len = struct.unpack('>I', header)[0]
-            body = _recv_exact(sock, body_len)
-            if body is None:
+            meta = json.loads(meta_bytes.decode('utf-8'))
+
+            jpeg_bytes = _recv_framed(sock)
+            if jpeg_bytes is None:
                 raise RuntimeError(
                     "main.py dong ket noi giua chung luc dang gui du lieu."
                 )
-            payload = json.loads(body.decode('utf-8'))
 
-            jpeg_bytes = base64.b64decode(payload["jpeg_b64"])
             frame = cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
-            boxes = [tuple(b) for b in payload["boxes"]]
-            inference_ms = payload["inference_ms"]
-            fps = payload["fps"]
+            boxes = [tuple(b) for b in meta["boxes"]]
+            inference_ms = meta["inference_ms"]
+            fps = meta["fps"]
 
             yield frame, boxes, inference_ms, fps
     finally:
