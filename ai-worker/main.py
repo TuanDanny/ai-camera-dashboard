@@ -146,6 +146,14 @@ def process_stream(stream_info, hailo_instance=None):
         publish_alert(station_id, "info", "stream_recovered",
                       f"Stream {station_id} da ket noi lai binh thuong.")
 
+    def on_frame_dropped(dropped_count):
+        # Rot khung o day nghia la buffer NPU (buffer_size=4) day - CPU
+        # (VehicleClassifier/DirectionCounter/publish) khong theo kip NPU.
+        # Chi log de theo doi thuc te (npu_plan.md muc 3.3), khong publish
+        # alert MQTT vi 1-2 khung le te khong phai su co nghiem trong.
+        print(f"[WARN] [{station_id}] Buffer NPU day, da rot {dropped_count} "
+              f"khung tich luy - CPU co the dang cham hon NPU.")
+
     if MODEL_BACKEND == 'hailo':
         if not HAS_HAILO:
             raise RuntimeError(
@@ -158,7 +166,8 @@ def process_stream(stream_info, hailo_instance=None):
             buffer_size=4,
             track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
             match_thresh=HAILO_MATCH_THRESH,
-            on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered
+            on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered,
+            on_frame_dropped=on_frame_dropped
         )
     else:
         source = cpu_frame_source(
