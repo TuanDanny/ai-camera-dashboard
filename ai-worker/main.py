@@ -35,6 +35,27 @@ MAX_DET = config['model']['max_det']
 TARGET_CLASSES = config['model']['classes']
 TRACKER_CONFIG = os.path.join(os.path.dirname(__file__), config['model']['tracker_config'])
 
+MODEL_BACKEND = config['model'].get('backend', 'cpu')
+HAILO_HEF_PATH = config['model'].get('hailo_hef_path', 'auto')
+
+# Import "tre" (chi khi thuc su can) - may chi chay backend cpu khong bat
+# buoc phai cai duoc hailo_platform/picamera2 (thu vien dac thu phan cung,
+# chi cai qua apt, khong co tren PyPI).
+HAS_HAILO = False
+if MODEL_BACKEND == 'hailo':
+    try:
+        from pipeline.hailo_source import create_hailo, DEFAULT_HEF_PATH as _HAILO_DEFAULT_HEF
+        from pipeline.hailo_frame_source import hailo_frame_source
+        HAS_HAILO = True
+    except ImportError as e:
+        print(f"[WARN] model.backend=hailo nhung khong import duoc thu vien Hailo: {e}")
+
+    with open(TRACKER_CONFIG, 'r') as f:
+        _tracker_yaml = yaml.safe_load(f)
+    HAILO_TRACK_THRESH = _tracker_yaml.get('track_high_thresh', 0.25)
+    HAILO_TRACK_BUFFER = _tracker_yaml.get('track_buffer', 30)
+    HAILO_MATCH_THRESH = _tracker_yaml.get('match_thresh', 0.8)
+
 LOCK_AFTER = config['classifier']['lock_after']
 CLASS_MIN_CONF = config['classifier']['class_min_conf']
 
@@ -84,7 +105,7 @@ except Exception as e:
     sys.exit(1)
 
 # AI Processing per stream
-def process_stream(stream_info):
+def process_stream(stream_info, hailo_instance=None):
     station_id = stream_info['station_id']
     url = stream_info['url']
     location = stream_info['location_name']
@@ -125,11 +146,26 @@ def process_stream(stream_info):
         publish_alert(station_id, "info", "stream_recovered",
                       f"Stream {station_id} da ket noi lai binh thuong.")
 
-    source = cpu_frame_source(
-        station_id, url, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
-        TARGET_CLASSES, MAX_DET, TRACKER_CONFIG,
-        on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered
-    )
+    if MODEL_BACKEND == 'hailo':
+        if not HAS_HAILO:
+            raise RuntimeError(
+                "model.backend=hailo nhung khong import duoc thu vien Hailo - "
+                "kiem tra lai venv co duoc wiring file .pth toi "
+                "/usr/lib/python3/dist-packages chua (xem README/WALKTHROUGH)."
+            )
+        source = hailo_frame_source(
+            hailo_instance, url, TARGET_CLASSES, conf=CONF_THRESH,
+            buffer_size=4,
+            track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
+            match_thresh=HAILO_MATCH_THRESH,
+            on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered
+        )
+    else:
+        source = cpu_frame_source(
+            station_id, url, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
+            TARGET_CLASSES, MAX_DET, TRACKER_CONFIG,
+            on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered
+        )
 
     for frame, boxes, inference_ms, fps in source:
         frame_index += 1
@@ -233,9 +269,22 @@ def process_stream(stream_info):
             seq += 1
 
 def main():
+    # QUAN TRONG: moi Hailo() PHAI khoi tao tu CUNG 1 thread duy nhat (o day
+    # la main thread) TRUOC khi mo thread rieng cho tung stream - da kiem
+    # chung bang thu nghiem thuc te rang 2 OS thread khac nhau tu khoi tao
+    # rieng se gay loi native "Resource deadlock avoided" du co khoa
+    # (xem npu_plan.md muc 2.2b, pipeline/hailo_source.py). Thread xu ly
+    # tung stream sau do CHI duoc goi .run() tren instance da co san.
+    hailo_instances = {}
+    if MODEL_BACKEND == 'hailo' and HAS_HAILO:
+        hef_path = _HAILO_DEFAULT_HEF if HAILO_HEF_PATH == 'auto' else HAILO_HEF_PATH
+        for stream in config['streams']:
+            hailo_instances[stream['station_id']] = create_hailo(hef_path)
+
     threads = []
     for stream in config['streams']:
-        t = threading.Thread(target=process_stream, args=(stream,))
+        hailo_instance = hailo_instances.get(stream['station_id'])
+        t = threading.Thread(target=process_stream, args=(stream, hailo_instance))
         t.daemon = True
         t.start()
         threads.append(t)
