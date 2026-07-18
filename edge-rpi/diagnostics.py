@@ -5,6 +5,12 @@ import time
 # Try importing psutil, fallback to dummy values if not installed
 try:
     import psutil
+    # psutil.cpu_percent() so sanh voi lan goi truoc do - lan goi DAU TIEN
+    # trong doi tien trinh se so sanh voi luc tien trinh khoi dong (vo nghia,
+    # thuong ra 0.0 hoac so bat thuong). Moi luc import mot lan de "vut bo"
+    # ket qua vo nghia nay, cac lan goi sau trong vong lap heartbeat se tra
+    # ve % thuc te tinh tu lan goi truoc.
+    psutil.cpu_percent(percpu=True)
 except ImportError:
     psutil = None
 
@@ -30,7 +36,12 @@ def get_hardware_stats(signal_rssi_dbm=None, signal_quality_pct=None):
         "signal_rssi_dbm": signal_rssi_dbm,
         "signal_quality_pct": signal_quality_pct,
         "fps": None,                    # populated separately by ai-worker's own telemetry row
-        "inference_ms": None
+        "inference_ms": None,
+        "cpu_count": 4,                 # Raspberry Pi 4 core - dummy fallback khi khong co psutil
+        "cpu_core0_pct": None,
+        "cpu_core1_pct": None,
+        "cpu_core2_pct": None,
+        "cpu_core3_pct": None,
     }
 
     if psutil:
@@ -40,6 +51,11 @@ def get_hardware_stats(signal_rssi_dbm=None, signal_quality_pct=None):
 
             disk = psutil.disk_usage('/')
             stats["disk_usage_pct"] = int(disk.percent)
+
+            per_core = psutil.cpu_percent(percpu=True)
+            stats["cpu_count"] = len(per_core)
+            for i in range(4):
+                stats[f"cpu_core{i}_pct"] = per_core[i] if i < len(per_core) else None
         except Exception as e:
             print(f"Error reading psutil stats: {e}")
 

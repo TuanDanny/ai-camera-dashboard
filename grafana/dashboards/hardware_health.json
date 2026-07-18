@@ -2,19 +2,20 @@
   "title": "Hardware Health",
   "tags": ["hardware", "shtp"],
   "timezone": "browser",
-  "refresh": "3s",
+  "refresh": "2s",
   "panels": [
     {
       "id": 1,
-      "title": "Average CPU Temperature (°C)",
+      "title": "Current CPU Temperature (°C)",
+      "description": "Gia tri nhiet do CPU moi nhat (khong phai trung binh), cap nhat moi 2s.",
       "type": "gauge",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT avg(cpu_temp_c) as cpu_temp_c FROM hardware_metrics WHERE $__timeFilter(recorded_at)",
+          "rawSql": "SELECT cpu_temp_c FROM hardware_metrics WHERE cpu_temp_c IS NOT NULL ORDER BY received_at DESC LIMIT 1",
           "refId": "A"
         }
       ],
@@ -34,12 +35,54 @@
       }
     },
     {
+      "id": 5,
+      "title": "Min Temp (°C)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 3, "w": 3, "x": 0, "y": 5 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT min(cpu_temp_c) as cpu_temp_c FROM hardware_metrics WHERE $__timeFilter(recorded_at)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Max Temp (°C)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 3, "w": 3, "x": 3, "y": 5 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT max(cpu_temp_c) as cpu_temp_c FROM hardware_metrics WHERE $__timeFilter(recorded_at)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "color": { "mode": "fixed", "fixedColor": "red" }
+        }
+      }
+    },
+    {
       "id": 3,
       "title": "Current FPS",
       "description": "Gia tri fps moi nhat tu ai-worker, cap nhat moi publish.status_interval_s giay (mac dinh 3s) - doc lap voi cua so dem xe.",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 6 },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
       "targets": [
         {
           "format": "table",
@@ -91,8 +134,66 @@
           "refId": "A"
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "CPU Cores",
+      "description": "So nhan CPU vat ly bao cao boi psutil tren edge-rpi (Raspberry Pi 4 = 4 nhan).",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT cpu_count FROM hardware_metrics WHERE cpu_count IS NOT NULL ORDER BY received_at DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "text" }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "CPU Core Usage (%)",
+      "description": "% su dung tung nhan CPU, cap nhat moi 2s. Mau sac the hien trang thai: xanh la binh thuong, cam la tai cao, do la qua tai.",
+      "type": "bargauge",
+      "datasource": "PostgreSQL",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 18 },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT cpu_core0_pct AS \"Core 0\", cpu_core1_pct AS \"Core 1\", cpu_core2_pct AS \"Core 2\", cpu_core3_pct AS \"Core 3\" FROM hardware_metrics WHERE cpu_core0_pct IS NOT NULL ORDER BY received_at DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      }
     }
   ],
   "schemaVersion": 39,
-  "version": 4
+  "version": 6
 }
