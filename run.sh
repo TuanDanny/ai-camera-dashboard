@@ -5,6 +5,36 @@ echo "Starting SHTP Traffic Server..."
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
+# Kiem tra tien trinh cu con sot lai TRUOC khi lam gi khac - tung gap truong
+# hop 2 bo edge_agent.py/main.py chay chung (1 bo cu quen tat + 1 bo run.sh
+# vua mo) tranh nhau CPU va /dev/video0, gay FPS tut manh ma khong ro nguyen
+# nhan. Anchor "$" o cuoi pattern de chi khop dong lenh THAT SU ket thuc
+# bang "-u edge_agent.py"/"-u main.py" (chay qua .venv nay), tranh nham voi
+# process khac (vd shell wrapper) chi tinh co chua chuoi do o giua dong lenh.
+AI_WORKER_VENV="$DIR/ai-worker/.venv/bin/python3"
+echo ""
+echo "[CHECK] Dang kiem tra tien trinh cu con sot lai tu lan chay truoc..."
+STRAY_PY=$(pgrep -f "\.venv/bin/python3 -u (edge_agent|main)\.py\$" 2>/dev/null)
+STRAY_FFMPEG=$(pgrep -f "ffmpeg .*-rtsp_transport tcp rtsp://" 2>/dev/null)
+STRAY_ALL=$(printf '%s\n%s\n' "$STRAY_PY" "$STRAY_FFMPEG" | grep -v '^$' | sort -u)
+
+if [ -n "$STRAY_ALL" ]; then
+    echo "[WARN] Phat hien tien trinh cu dang chay tu truoc - neu mo them ban moi se"
+    echo "       tranh chap CPU/camera voi ban nay (day chinh la nguyen nhan tung gay"
+    echo "       FPS tut khi 2 bo main.py/edge_agent.py vo tinh chay chung mot luc):"
+    ps -o pid,etime,cmd -p "$(echo "$STRAY_ALL" | tr '\n' ',' | sed 's/,$//')" 2>/dev/null
+    read -p "Tat cac tien trinh nay truoc khi tiep tuc? (Y/n): " KILL_STRAY
+    if [[ ! "$KILL_STRAY" =~ ^[Nn]$ ]]; then
+        echo "$STRAY_ALL" | xargs -r kill -9
+        echo "[INFO] Da tat tien trinh cu. Doi 2 giay de giai phong camera..."
+        sleep 2
+    else
+        echo "[WARN] Giu nguyen - co the gay tranh chap CPU/camera voi tien trinh sap mo."
+    fi
+else
+    echo "[INFO] Khong co tien trinh cu nao con sot lai - an toan de tiep tuc."
+fi
+
 if [ ! -f ".env" ]; then
     echo "[INFO] .env file not found. Creating from .env.example..."
     cp .env.example .env
@@ -52,7 +82,6 @@ echo "[INFO] Waiting a few seconds for Mosquitto/Postgres to settle before start
 sleep 5
 
 PROCESSES_STARTED=false
-AI_WORKER_VENV="$DIR/ai-worker/.venv/bin/python3"
 if [ ! -x "$AI_WORKER_VENV" ]; then
     echo ""
     echo "[WARN] ai-worker/.venv not found - skipping edge_agent.py and main.py."
