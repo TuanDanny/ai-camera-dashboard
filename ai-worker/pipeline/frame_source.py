@@ -20,8 +20,10 @@ STREAM_RETRY_BACKOFF_S = 5
 def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh,
                       target_classes, max_det, tracker_config,
                       on_stream_down=None, on_stream_recovered=None):
-    """Sinh (boxes, frame_height, inference_ms, fps) cho tung frame da qua YOLO+tracker.
+    """Sinh (frame, boxes, inference_ms, fps) cho tung frame da qua YOLO+tracker.
 
+    frame: anh goc (r.orig_img) - KHONG copy, ben goi tu copy() neu can ve
+    len anh ma khong muon dung chung buffer voi ultralytics.
     boxes: list cac tuple (track_id, cls_id, confidence, x1, y1, x2, y2).
     Tu quan ly viec load model va retry/backoff khi mat stream - khong bao
     gio tra ve False/None, chi (re)raise neu 'ultralytics' khong cai duoc.
@@ -68,7 +70,6 @@ def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh
 
                 inference_ms = int(r.speed.get('inference', 0.0))
                 fps = 1000.0 / (sum(r.speed.values()) + 1e-6)
-                frame_height = r.orig_shape[0]
 
                 boxes = []
                 if r.boxes is not None and r.boxes.is_track:
@@ -79,7 +80,7 @@ def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
                         boxes.append((track_id, cls_id, confidence, x1, y1, x2, y2))
 
-                yield boxes, frame_height, inference_ms, fps
+                yield r.orig_img, boxes, inference_ms, fps
 
             # Generator tracker ket thuc ma khong raise - coi nhu mat ket noi,
             # retry thay vi bo cuoc.

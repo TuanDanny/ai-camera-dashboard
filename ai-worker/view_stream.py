@@ -26,14 +26,10 @@ import sys
 import time
 import yaml
 import cv2
-import torch
-# Without this, torch's CPU backend does not use all available cores by
-# default - same fix as main.py, measured ~2.6x slower when left unset.
-torch.set_num_threads(os.cpu_count() or 4)
-from ultralytics import YOLO
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vehicle_classifier import VehicleClassifier  # noqa: E402
+from pipeline.frame_source import cpu_frame_source  # noqa: E402
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(CONFIG_PATH, 'r') as f:
@@ -59,23 +55,13 @@ WINDOW_NAME = f"AI Worker live view - {STATION_ID}"
 
 
 def main():
-    print(f"[INFO] Dang tai model: {MODEL_PATH}")
-    model = YOLO(MODEL_PATH)
     classifier = VehicleClassifier(CLASS_MIN_CONF, LOCK_AFTER)
 
+    print(f"[INFO] Dang tai model: {MODEL_PATH}")
     print(f"[INFO] Dang ket noi stream: {STREAM_URL}")
-    results = model.track(
-        source=STREAM_URL,
-        persist=True,
-        stream=True,
-        conf=CONF_THRESH,
-        imgsz=IMGSZ,
-        iou=IOU_THRESH,
-        classes=TARGET_CLASSES,
-        max_det=MAX_DET,
-        tracker=TRACKER_CONFIG,
-        device='cpu',
-        verbose=False,
+    source = cpu_frame_source(
+        STATION_ID, STREAM_URL, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
+        TARGET_CLASSES, MAX_DET, TRACKER_CONFIG
     )
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -84,7 +70,7 @@ def main():
     prev_time = time.perf_counter()
     print("[INFO] Nhan Q hoac ESC tren cua so de thoat.")
 
-    for r in results:
+    for orig_frame, boxes, inference_ms, fps in source:
         now = time.perf_counter()
         elapsed = now - prev_time
         prev_time = now
@@ -94,28 +80,23 @@ def main():
         display_fps = current_fps if display_fps == 0 else display_fps * 0.85 + current_fps * 0.15
 
         frame_index += 1
-        frame = r.orig_img.copy()
+        frame = orig_frame.copy()
         active_count = 0
 
-        boxes = r.boxes
-        if boxes is not None and boxes.is_track:
-            for box in boxes:
-                cls_id = int(box.cls[0].item())
-                track_id = int(box.id[0].item())
-                confidence = float(box.conf[0].item())
-                x1, y1, x2, y2 = box.xyxy[0].int().tolist()
+        for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
+            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
-                locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
-                classifier.mark_seen(track_id, frame_index)
-                category = COCO_MAP.get(locked_cls, "unknown")
-                active_count += 1
+            locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
+            classifier.mark_seen(track_id, frame_index)
+            category = COCO_MAP.get(locked_cls, "unknown")
+            active_count += 1
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                label = f"ID {track_id} {category} {confidence:.2f}"
-                cv2.putText(
-                    frame, label, (x1, max(y1 - 10, 20)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
-                )
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            label = f"ID {track_id} {category} {confidence:.2f}"
+            cv2.putText(
+                frame, label, (x1, max(y1 - 10, 20)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+            )
 
         classifier.cleanup_old_tracks(frame_index)
 

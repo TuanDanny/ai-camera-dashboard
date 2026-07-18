@@ -131,8 +131,9 @@ def process_stream(stream_info):
         on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered
     )
 
-    for boxes, frame_height, inference_ms, fps in source:
+    for frame, boxes, inference_ms, fps in source:
         frame_index += 1
+        frame_height = frame.shape[0]
 
         for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
             locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
