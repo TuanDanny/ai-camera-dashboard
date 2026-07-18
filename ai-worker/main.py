@@ -9,6 +9,7 @@ import paho.mqtt.client as mqtt
 from vehicle_classifier import VehicleClassifier
 from direction_counter import DirectionCounter
 from pipeline.frame_source import cpu_frame_source
+from pipeline.frame_broadcast import FrameBroadcaster
 
 # Load config
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.yaml')
@@ -105,7 +106,7 @@ except Exception as e:
     sys.exit(1)
 
 # AI Processing per stream
-def process_stream(stream_info, hailo_instance=None):
+def process_stream(stream_info, hailo_instance=None, broadcaster=None):
     station_id = stream_info['station_id']
     url = stream_info['url']
     location = stream_info['location_name']
@@ -179,6 +180,12 @@ def process_stream(stream_info, hailo_instance=None):
     for frame, boxes, inference_ms, fps in source:
         frame_index += 1
         frame_height = frame.shape[0]
+
+        # Phat lai khung + ket qua da xu ly qua socket cho view_stream.py
+        # (neu co client dang xem) - KHONG chay YOLO lan 2 nua. publish()
+        # cuc nhe (chi ghi de bien), khong lam cham vong lap NPU o day.
+        if broadcaster is not None:
+            broadcaster.publish(station_id, frame, boxes, inference_ms, fps)
 
         for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
             locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
@@ -290,10 +297,18 @@ def main():
         for stream in config['streams']:
             hailo_instances[stream['station_id']] = create_hailo(hef_path)
 
+    # Chi 1 FrameBroadcaster duy nhat cho ca main.py (khong phai 1 cai/
+    # stream) - view_stream.py cung chi xem dung 1 camera
+    # (config['streams'][0]), nen chi station DAU TIEN moi phat qua
+    # socket, khop dung hanh vi hien tai. Neu sau nay can xem duoc nhieu
+    # camera thi phai thiet ke lai (xem npu_plan.md phan con mo).
+    broadcaster = FrameBroadcaster()
+
     threads = []
-    for stream in config['streams']:
+    for i, stream in enumerate(config['streams']):
         hailo_instance = hailo_instances.get(stream['station_id'])
-        t = threading.Thread(target=process_stream, args=(stream, hailo_instance))
+        stream_broadcaster = broadcaster if i == 0 else None
+        t = threading.Thread(target=process_stream, args=(stream, hailo_instance, stream_broadcaster))
         t.daemon = True
         t.start()
         threads.append(t)
@@ -304,6 +319,7 @@ def main():
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nStopping AI Worker...")
+        broadcaster.close()
         client.loop_stop()
         client.disconnect()
         print("[INFO] AI Worker stopped.")

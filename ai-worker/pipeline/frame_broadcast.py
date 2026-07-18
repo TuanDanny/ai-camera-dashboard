@@ -10,6 +10,11 @@ import numpy as np
 
 DEFAULT_SOCKET_PATH = "/tmp/shtp_ai_worker_view.sock"
 JPEG_QUALITY = 80
+# Neu client khong doc kip trong tung nay giay, coi nhu client "chet"/
+# treo, dong ket noi thay vi de conn.sendall() cho vo thoi han (xem
+# _accept_loop). socket.timeout la alias cua TimeoutError, la subclass cua
+# OSError - da duoc bat dung boi "except OSError" co san trong _sender_loop.
+SEND_TIMEOUT_S = 0.3
 
 
 class FrameBroadcaster:
@@ -60,6 +65,14 @@ class FrameBroadcaster:
                 conn, _ = self._server_sock.accept()
             except OSError:
                 break
+            # QUAN TRONG: neu khong dat timeout, client ket noi vao nhung
+            # khong doc gi (vd cua so bi dung, GUI treo) se lam OS socket
+            # buffer day dan, roi conn.sendall() trong _sender_loop se
+            # CHAN VO THOI HAN - da do duoc thuc te lam FPS NPU tut ~10%
+            # (44.8 -> 40.5fps trung binh) du publish() ban than khong
+            # block. Dat timeout ngan de gioi han toi da thoi gian
+            # _sender_loop co the bi "ket" cho 1 client cham.
+            conn.settimeout(SEND_TIMEOUT_S)
             with self._client_lock:
                 if self._client_conn is not None:
                     try:
