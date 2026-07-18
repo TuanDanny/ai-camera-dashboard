@@ -92,11 +92,11 @@ def main():
 
     if MODEL_BACKEND == 'relay':
         from pipeline.frame_broadcast import socket_frame_source
-        try:
-            source = socket_frame_source()
-        except RuntimeError as e:
-            print(f"[ERROR] {e}")
-            return
+        # socket_frame_source() la generator: goi ham o day KHONG chay gi
+        # ca (ke ca connect()) - loi mat ket noi chi xay ra khi bat dau
+        # iterate, nen duoc bat o try/except quanh vong lap for ben duoi,
+        # khong phai o day.
+        source = socket_frame_source()
     elif MODEL_BACKEND == 'hailo':
         if not HAS_HAILO:
             print("[ERROR] --backend hailo nhung khong import duoc thu vien Hailo - "
