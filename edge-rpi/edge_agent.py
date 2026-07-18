@@ -72,7 +72,26 @@ def start_video_stream():
                 # If ffmpeg isn't on path, it might fail, so we catch it
                 stream_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             else:
-                stream_process = subprocess.Popen(["bash", script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                # Truyen cac gia tri da doc dang hoang qua yaml.safe_load() cho
+                # start_stream.sh bang bien moi truong, de tranh script bash do
+                # phai tu parse lai config.yaml bang grep/sed rieng (2 noi doc
+                # 1 file de lech nhau ma khong bao loi). start_stream.sh van tu
+                # doc file khi chay tay doc lap (khong co cac bien nay).
+                cam = config.get('camera', {})
+                stream_env = os.environ.copy()
+                stream_env.update({
+                    "STATION_ID": str(STATION_ID),
+                    "SERVER_HOST": str(MQTT_HOST),
+                    "RTSP_PORT": str(config['server']['mediamtx_rtsp_port']),
+                    "WIDTH": str(cam.get('width', '')),
+                    "HEIGHT": str(cam.get('height', '')),
+                    "FPS": str(cam.get('fps', '')),
+                    "BITRATE": str(cam.get('bitrate', '')),
+                    "CAMERA_TYPE": str(cam.get('type', '')),
+                    "DEVICE": str(cam.get('device', '')),
+                    "CAMERA_URL": str(cam.get('url', '')),
+                })
+                stream_process = subprocess.Popen(["bash", script_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=stream_env)
             return True
         except Exception as e:
             print(f"[ERROR] Failed to start stream process: {e}")

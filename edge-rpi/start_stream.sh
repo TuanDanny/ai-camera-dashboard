@@ -12,17 +12,21 @@ get_config_val() {
     grep -E "^[[:space:]]*$key:" "$CONFIG_FILE" | head -n 1 | cut -d':' -f2- | tr -d ' "'''
 }
 
-STATION_ID=$(get_config_val "station_id")
-SERVER_HOST=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "host:" | cut -d':' -f2- | tr -d ' "''')
-RTSP_PORT=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "mediamtx_rtsp_port:" | cut -d':' -f2- | tr -d ' "''')
+# Moi bien uu tien lay tu bien moi truong da duoc truyen san (vd tu
+# edge_agent.py - noi da doc config.yaml bang yaml.safe_load() dang hoang),
+# chi fallback ve grep/sed tu doc file khi chay tay doc lap (khong qua
+# edge_agent.py) de tranh 2 noi doc lech nhau 1 file config ma khong ai biet.
+STATION_ID="${STATION_ID:-$(get_config_val "station_id")}"
+SERVER_HOST="${SERVER_HOST:-$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "host:" | cut -d':' -f2- | tr -d ' "''')}"
+RTSP_PORT="${RTSP_PORT:-$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "mediamtx_rtsp_port:" | cut -d':' -f2- | tr -d ' "''')}"
 
-WIDTH=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')
-HEIGHT=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')
-FPS=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')
-BITRATE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')
-CAMERA_TYPE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')
-DEVICE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')
-CAMERA_URL=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')
+WIDTH="${WIDTH:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')}"
+HEIGHT="${HEIGHT:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')}"
+FPS="${FPS:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')}"
+BITRATE="${BITRATE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')}"
+CAMERA_TYPE="${CAMERA_TYPE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')}"
+DEVICE="${DEVICE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')}"
+CAMERA_URL="${CAMERA_URL:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')}"
 
 RTSP_URL="rtsp://$SERVER_HOST:$RTSP_PORT/$STATION_ID"
 
