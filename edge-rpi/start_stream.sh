@@ -46,9 +46,14 @@ if [ "$CAMERA_TYPE" == "csi" ]; then
 elif [ "$CAMERA_TYPE" == "webcam" ]; then
     # USB Webcam (using ffmpeg)
     echo "[INFO] Executing USB Webcam ffmpeg stream..."
-    # Check if webcam supports H264 hardware encoding directly, else transpile
+    # Thu truoc: camera co ho tro xuat H264 phan cung truc tiep khong
+    # (-codec:v h264 la dinh dang input rieng, khong dung chung voi mjpeg).
     ffmpeg -re -f v4l2 -codec:v h264 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec copy -f rtsp -rtsp_transport tcp "$RTSP_URL" || \
-    ffmpeg -re -f v4l2 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "$RTSP_URL"
+    # Fallback: da so USB webcam chi dat FPS cao (25-30fps) o dang nen MJPG -
+    # neu khong ep dinh dang, ffmpeg co the tu chon YUYV (thuong chi dat
+    # ~10fps o 720p), khien camera khong doc kip toc do yeu cau, sinh khung
+    # hinh loi/thieu/toi.
+    ffmpeg -re -f v4l2 -input_format mjpeg -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "$RTSP_URL"
 elif [ "$CAMERA_TYPE" == "ip_webcam" ]; then
     # Android "IP Webcam" app - HTTP MJPEG source, always needs transcoding
     # to H264 (no hardware passthrough possible from an MJPEG source).

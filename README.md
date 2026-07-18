@@ -57,20 +57,22 @@ graph LR
 ```text
 .
 ├── docker-compose.yml       # Docker orchestration configuration
-├── deploy.sh                # Automated deployment & permission script
+├── run.sh                   # Interactive setup + launch script (camera config, Docker stack, edge/AI processes)
 ├── .env.example             # Environment variables template
+├── edge-rpi/                # Camera capture & RTSP streaming (runs on the Raspberry Pi)
+├── ai-worker/                # YOLO-based vehicle detection/tracking + MQTT telemetry publisher
 ├── mosquitto/               # MQTT broker configurations & ACLs
 ├── nodered/                 # Node-RED flows, settings, and plugins
 ├── postgres/                # PostgreSQL init scripts (Seed data & Schema)
 ├── grafana/                 # Grafana provisioning & dashboard templates
-└── simulator/               # Python-based Edge Simulator for testing
+└── docs/archive/            # Superseded planning docs, kept for history
 ```
 
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
 - Docker & Docker Compose installed.
-- Python 3.8+ (Only if you want to run the simulator).
+- Python 3.8+ with the `ai-worker/.venv` set up (see `ai-worker/requirements.txt`).
 
 ### 2. Configuration
 Copy the environment template and configure your secure passwords:
@@ -80,23 +82,16 @@ cp .env.example .env
 ```
 
 ### 3. Deployment
-Run the automated deployment script. This sets up necessary directories, fixes Linux permissions, and starts the Docker stack.
+Run the interactive setup/launch script. It creates missing config files from the `.example` templates, sets up directory permissions, asks for the camera source, starts the Docker stack, and launches `edge_agent.py` + `main.py`.
 ```bash
-chmod +x deploy.sh
-./deploy.sh
+chmod +x run.sh
+./run.sh
 ```
 
 ### 4. Access the Services
 Once running, the services are available locally:
 - **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000)
 - **Node-RED Editor**: [http://localhost:1880](http://localhost:1880)
-
-### 5. Run the Edge Simulator (Optional)
-To see data flowing immediately without physical cameras, use the built-in simulator:
-```bash
-pip install paho-mqtt
-python simulator/edge_simulator.py --stations 2 --interval 5
-```
 
 ## 📜 License
 

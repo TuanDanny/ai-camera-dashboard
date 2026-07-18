@@ -51,8 +51,9 @@ echo ""
 echo "[SETUP] Chon nguon camera cho tram nay:"
 echo "  1) Raspberry Pi Camera Module (CSI)"
 echo "  2) IP Webcam (dien thoai Android, app IP Webcam)"
+echo "  3) USB Webcam (camera cam qua cong USB, vd /dev/video0)"
 CURRENT_CAM_TYPE=$(get_camera_field "type")
-read -p "Nhap 1 hoac 2 (Enter de giu nguyen '${CURRENT_CAM_TYPE}'): " CAMERA_CHOICE
+read -p "Nhap 1, 2 hoac 3 (Enter de giu nguyen '${CURRENT_CAM_TYPE}'): " CAMERA_CHOICE
 
 case "$CAMERA_CHOICE" in
     1)
@@ -94,6 +95,20 @@ case "$CAMERA_CHOICE" in
                 ATTEMPT=0
             fi
         done
+        ;;
+    3)
+        set_camera_field "type" "webcam"
+        CURRENT_DEVICE=$(get_camera_field "device")
+        echo "[INFO] Cac thiet bi video dang cam vao:"
+        ls /dev/video* 2>/dev/null || echo "  (khong tim thay /dev/video* nao)"
+        read -p "Nhap duong dan device (Enter de giu '${CURRENT_DEVICE}'): " NEW_DEVICE
+        NEW_DEVICE="${NEW_DEVICE:-$CURRENT_DEVICE}"
+        if [ -e "$NEW_DEVICE" ]; then
+            echo "[INFO] Da tim thay $NEW_DEVICE."
+        else
+            echo "[WARN] Khong tim thay $NEW_DEVICE - kiem tra lai day cam USB. Cau hinh van duoc luu."
+        fi
+        set_camera_field "device" "$NEW_DEVICE"
         ;;
     *)
         echo "[INFO] Giu nguyen cau hinh camera hien tai (type=${CURRENT_CAM_TYPE})."
