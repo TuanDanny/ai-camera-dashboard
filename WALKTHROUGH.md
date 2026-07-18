@@ -87,13 +87,17 @@ nhau theo mục đích:
   hạn phần cứng thật), chỉ có thể báo lỗi rõ ràng và hướng dẫn dùng CPU
   thay thế.
 
-**Vì giới hạn trên, `view_stream.py` có cờ `--backend {cpu,hailo,relay}`**
-— `relay` (mặc định khi `run.sh` tự mở) không đụng tới NPU/CPU YOLO gì cả,
-chỉ nhận lại kết quả `main.py` đã xử lý sẵn qua 1 socket nội bộ (xem mục
-7) nên không bao giờ tranh chấp NPU với `main.py`, đồng thời FPS hiển thị
-gần với FPS thật của `main.py` hơn nhiều so với việc tự chạy lại YOLO trên
-CPU. `cpu`/`hailo` vẫn còn để tự chạy YOLO riêng khi cần (vd `main.py`
-chưa chạy, hoặc muốn debug riêng qua chính NPU sau khi tắt `main.py`).
+**Vì giới hạn trên, `view_stream.py` có cờ `--backend {hailo,relay}`**
+(`relay` là mặc định) — `relay` không đụng tới NPU/CPU YOLO gì cả, chỉ
+nhận lại kết quả `main.py` đã xử lý sẵn qua 1 socket nội bộ (xem mục 6)
+nên không bao giờ tranh chấp NPU với `main.py`, đồng thời FPS hiển thị
+gần với FPS thật của `main.py` hơn nhiều so với việc tự chạy lại YOLO
+riêng. `hailo` vẫn còn để tự mở NPU debug riêng khi `main.py` KHÔNG chạy
+(2 tiến trình OS không thể cùng giữ 1 NPU vật lý - xem trên). Chế độ tự
+chạy YOLO trên CPU (`--backend cpu`) trong `view_stream.py` đã bị loại bỏ
+hoàn toàn sau khi `relay` chạy ổn định qua `run.sh` thật - không còn cần
+thiết nữa, để tránh 2 pipeline AI chạy song song lãng phí như thiết kế
+ban đầu (xem mục 6).
 
 ## 5. Đa camera (nhiều luồng RTSP cùng lúc)
 

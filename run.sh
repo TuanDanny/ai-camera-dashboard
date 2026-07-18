@@ -135,12 +135,12 @@ if [ "$PROCESSES_STARTED" = true ]; then
             echo "[WARN] Khong phat hien man hinh do hoa (bien DISPLAY trong) - view_stream.py can giao dien GUI de hien cua so video, khong mo duoc qua SSH thuan. Bo qua."
         elif [ ! -x "$VIEW_VENV" ]; then
             echo "[WARN] Khong tim thay $VIEW_VENV - can venv rieng co opencv GUI cho view_stream.py. Cai 1 lan bang:"
-            echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml"
+            echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install opencv-python pyyaml"
             echo "        Mac dinh script nay dung 'view_stream.py --backend relay' (chi nhan lai ket qua"
-            echo "        da xu ly san tu main.py qua socket, khong tu chay YOLO rieng nua). Neu muon tu"
-            echo "        chay YOLO rieng qua NPU ('view_stream.py --backend hailo', phai tat main.py"
-            echo "        truoc), .venv-view can them wiring toi hailo_platform/picamera2 cua he thong"
-            echo "        (file .pth) va cai them lap/cython_bbox/scipy."
+            echo "        da xu ly san tu main.py qua socket, khong tu chay YOLO rieng nua) - chi can 2 goi"
+            echo "        tren la du. Neu muon tu mo NPU rieng de debug ('view_stream.py --backend hailo',"
+            echo "        chi dung duoc khi main.py KHONG chay), .venv-view can them wiring toi"
+            echo "        hailo_platform/picamera2 cua he thong (file .pth) va cai them lap/cython_bbox/scipy."
         else
             echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
             sleep 3

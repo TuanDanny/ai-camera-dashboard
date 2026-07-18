@@ -5,19 +5,19 @@ phai ban gia lap rieng). Khong publish MQTT, chi ve box + nhan len man hinh.
 
 Can chay bang mot python co opencv KHONG phai ban "headless" (ai-worker/
 .venv dung opencv-python-headless, khong ho tro cv2.imshow). Dung venv
-rieng ai-worker/.venv-view (co opencv-python ban day du + torch cai qua
-pip, KHONG phai ban torch cua he thong - xem ghi chu ben duoi):
+rieng ai-worker/.venv-view:
 
     cd ai-worker
     python3 -m venv .venv-view
-    .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml
-    .venv-view/bin/python3 view_stream.py
+    .venv-view/bin/pip install opencv-python pyyaml
+    .venv-view/bin/python3 view_stream.py --backend relay
 
-Luu y: yolo-cam/.venv cung co opencv GUI nhung duoc tao voi
---system-site-packages nen "torch" cua no thuc ra la ban apt cua he
-thong (cham hon ro ret tren ARM64 - do luong that: ~2.1fps so voi
-~10.4fps cua ban pip trong .venv-view, cung 1 model/tham so). Vi vay
-KHONG dung venv cua yolo-cam cho script nay.
+Che do mac dinh/nhe nhat la "relay" (chi nhan lai ket qua main.py da xu ly
+san qua socket, xem pipeline/frame_broadcast.py) - chi can opencv-python +
+pyyaml o tren la du, khong can ultralytics/torch gi ca. Che do "hailo" (tu
+mo NPU rieng de debug khi main.py khong chay) can them wiring toi
+hailo_platform cua he thong (file .pth) va cai them lap/cython_bbox/scipy
+(xem WALKTHROUGH.md muc 6-7).
 
 Nhan Q hoac ESC tren cua so de thoat.
 """
@@ -30,17 +30,12 @@ import cv2
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vehicle_classifier import VehicleClassifier  # noqa: E402
-from pipeline.frame_source import cpu_frame_source  # noqa: E402
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(CONFIG_PATH, 'r') as f:
     config = yaml.safe_load(f)
 
-MODEL_PATH = config['model']['path']
 CONF_THRESH = config['model']['conf']
-IMGSZ = config['model']['imgsz']
-IOU_THRESH = config['model']['iou']
-MAX_DET = config['model']['max_det']
 TARGET_CLASSES = config['model']['classes']
 TRACKER_CONFIG = os.path.join(os.path.dirname(__file__), config['model']['tracker_config'])
 
@@ -56,15 +51,15 @@ WINDOW_NAME = f"AI Worker live view - {STATION_ID}"
 
 _arg_parser = argparse.ArgumentParser()
 _arg_parser.add_argument(
-    "--backend", choices=["cpu", "hailo", "relay"], default=None,
-    help="Ep backend rieng cho view_stream.py, bo qua model.backend trong "
-         "config.yaml. 'relay': KHONG tu chay YOLO, chi nhan lai ket qua "
-         "NPU da xu ly san tu main.py qua socket (nhe nhat, main.py phai "
-         "dang chay). 'cpu'/'hailo': tu chay YOLO rieng nhu truoc."
+    "--backend", choices=["hailo", "relay"], default="relay",
+    help="'relay' (mac dinh): KHONG tu chay YOLO, chi nhan lai ket qua NPU "
+         "da xu ly san tu main.py qua socket (nhe nhat, main.py phai dang "
+         "chay). 'hailo': tu mo NPU rieng de debug (chi dung duoc khi "
+         "main.py KHONG dang chay - Hailo-8L chi co 1 device vat ly)."
 )
 _args = _arg_parser.parse_args()
 
-MODEL_BACKEND = _args.backend if _args.backend else config['model'].get('backend', 'cpu')
+MODEL_BACKEND = _args.backend
 HAILO_HEF_PATH = config['model'].get('hailo_hef_path', 'auto')
 
 # Import "tre" - xem giai thich trong main.py
@@ -97,7 +92,7 @@ def main():
         # iterate, nen duoc bat o try/except quanh vong lap for ben duoi,
         # khong phai o day.
         source = socket_frame_source()
-    elif MODEL_BACKEND == 'hailo':
+    else:  # MODEL_BACKEND == 'hailo'
         if not HAS_HAILO:
             print("[ERROR] --backend hailo nhung khong import duoc thu vien Hailo - "
                   "kiem tra lai venv co duoc wiring file .pth chua.")
@@ -113,7 +108,7 @@ def main():
                     "main.py) giu thiet bi roi. Hailo-8L chi co 1 device vat ly, khong the "
                     "dung song song 2 tien trinh OS rieng biet cung mo NPU. Dung main.py "
                     "truoc roi chay lai view_stream.py, hoac chay "
-                    "'view_stream.py --backend cpu' de xem cung luc voi main.py dang giu NPU."
+                    "'view_stream.py --backend relay' de xem cung luc voi main.py dang giu NPU."
                 )
                 return
             raise
@@ -122,12 +117,6 @@ def main():
             buffer_size=1,
             track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
             match_thresh=HAILO_MATCH_THRESH,
-        )
-    else:
-        print(f"[INFO] Dang tai model: {MODEL_PATH}")
-        source = cpu_frame_source(
-            STATION_ID, STREAM_URL, MODEL_PATH, CONF_THRESH, IMGSZ, IOU_THRESH,
-            TARGET_CLASSES, MAX_DET, TRACKER_CONFIG
         )
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
