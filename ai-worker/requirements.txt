@@ -2,3 +2,12 @@ ultralytics>=8.0.0
 opencv-python-headless
 paho-mqtt
 pyyaml
+
+# Chi can cho model.backend: hailo (NPU) trong config.yaml - ByteTrack
+# rieng theo tung lop xe (pipeline/hailo_tracker.py, tracker_hailo/) khong
+# di qua pipeline tracking cua ultralytics. Bo qua duoc neu chi dung
+# backend: cpu. hailo_platform/picamera2 KHONG nam trong file nay vi chi
+# cai duoc qua apt (xem ghi chu trong config.yaml.example).
+lap
+cython_bbox
+scipy

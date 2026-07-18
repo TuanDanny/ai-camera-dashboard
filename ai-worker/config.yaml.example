@@ -13,6 +13,24 @@ model:
   max_det: 60
   classes: [1, 2, 3, 5, 7]
   tracker_config: tracker/traffic_bytetrack.yaml
+  # backend: "cpu" (mac dinh, dung model/imgsz/iou/path o tren qua
+  # ultralytics) hoac "hailo" (dung NPU Hailo-8L 13 TOPS qua HailoRT -
+  # nhanh gap ~4-8 lan CPU, do thuc te ~40-46fps/camera, ~21-24ms/frame).
+  # Can may co san Hailo-8L + apt package "hailo-all" da cai (cung cap
+  # hailort, python3-hailort, va model mau
+  # /usr/share/hailo-models/yolov8s_h8l.hef). Vi hailo_platform/picamera2
+  # chi cai duoc qua apt (khong co tren PyPI), ai-worker/.venv (va
+  # .venv-view neu muon xem qua NPU) can 1 lan setup them de thay duoc
+  # chung:
+  #   echo "/usr/lib/python3/dist-packages" | sudo tee \
+  #     ai-worker/.venv/lib/python3*/site-packages/hailo_system.pth
+  # Khi backend=hailo: path/imgsz/iou/device o tren bi bo qua, model duoc
+  # nap tu hailo_hef_path thay vi MODEL_PATH; tracking dung ByteTrack rieng
+  # cho tung lop xe (khong qua pipeline tracking cua ultralytics), van doc
+  # chung tham so tu tracker_config o tren (track_high_thresh/track_buffer/
+  # match_thresh).
+  backend: cpu
+  hailo_hef_path: /usr/share/hailo-models/yolov8s_h8l.hef
 
 classifier:
   lock_after: 5
