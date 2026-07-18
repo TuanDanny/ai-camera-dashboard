@@ -1,6 +1,15 @@
 import json
 import os
 
+TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nodered", "flow_templates")
+
+def _load_template(name):
+    # Doc dung 1 lan tai import - moi function-node trong Node-RED can 1 chuoi
+    # JS rieng (khong dung chung), nhung noi dung file .js tren disk deu la
+    # nguon "that", khong phai duplicate.
+    with open(os.path.join(TEMPLATES_DIR, name), "r", encoding="utf-8") as f:
+        return f.read().rstrip("\n")
+
 def generate_flows():
     # Read from the real environment (docker-compose sources .env into this
     # container/process) rather than hardcoding a secret in this file, since
@@ -117,7 +126,7 @@ def generate_flows():
                 "type": "function",
                 "z": "tab1",
                 "name": "Dedup QoS 1",
-                "func": "var cache = context.get('dedup_cache') || {};\nvar p = msg.payload;\nvar key = p.station_id + '_' + (p.seq || p.timestamp);\nvar now = Date.now();\nfor (var k in cache) {\n    if (now - cache[k] > 300000) delete cache[k];\n}\nif (cache[key]) { return null; }\ncache[key] = now;\ncontext.set('dedup_cache', cache);\nreturn msg;",
+                "func": _load_template("dedup.js"),
                 "outputs": 1,
                 "x": 350,
                 "y": y_pos,
@@ -156,120 +165,21 @@ def generate_flows():
         y_pos += 80
 
     # 1. Telemetry
-    telemetry_sql = """var p = msg.payload;
-msg.query = `INSERT INTO traffic_records (
-    station_id, recorded_at, seq, interval_seconds, 
-    motorbike_count, car_count, truck_count, bus_count, 
-    bicycle_count, unknown_count, total_count, 
-    avg_confidence, min_confidence, detections_raw, 
-    detections_filtered, lighting_condition
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`;
-msg.params = [p.station_id, p.timestamp, p.seq, p.interval_seconds, p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus, p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total, p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw, p.data.detections_filtered, p.data.lighting_condition];
-
-msg.query2 = `INSERT INTO hardware_metrics (
-    station_id, recorded_at, uptime_seconds, cpu_temp_c, 
-    enclosure_temp_c, input_voltage_v, signal_rssi_dbm, 
-    signal_quality_pct, free_memory_kb, disk_usage_pct, fps, 
-    inference_ms, watchdog_luckfox_ok, watchdog_esp32_ok, 
-    camera_status, last_reboot_reason
-) VALUES ($1, to_timestamp($2), null, $3, $4, $5, $6, $7, $8, $9, $10, $11, null, null, null, null)`;
-msg.params2 = [p.station_id, p.timestamp, p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm, p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms];
-
-// In Node-RED postgres node you can pass array of queries if needed, or we just insert traffic_records. 
-// Actually for simplicity we will just do traffic_records here. Hardware metrics will be parsed by heartbeat.
-return msg;"""
-    # Wait, the plan says hardware metrics are in telemetry. 
-    # Let's write them both. Node-RED postgres node supports msg.query. We can use pg-pool or just multiple nodes.
-    # To keep it simple, let's just insert traffic_records here and I will add a second pg insert node for hardware in telemetry.
     # NOTE: node-red-contrib-postgresql runs client.query(query, params) whenever msg.params
     # is non-empty, which forces Postgres' extended/prepared-statement protocol. That protocol
     # rejects a query string containing more than one semicolon-separated command ("cannot
-    # insert multiple commands into a prepared statement"), so the two INSERTs below must be
-    # combined into a single statement via a data-modifying CTE instead of being two separate
-    # ";"-terminated statements.
-    telemetry_sql = """var p = msg.payload;
-msg.query = `
-    WITH ins_traffic AS (
-        INSERT INTO traffic_records (
-            station_id, recorded_at, seq, interval_seconds,
-            motorbike_count, car_count, truck_count, bus_count,
-            bicycle_count, unknown_count, total_count,
-            inbound_count, outbound_count,
-            avg_confidence, min_confidence, detections_raw,
-            detections_filtered, lighting_condition
-        ) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-    )
-    INSERT INTO hardware_metrics (
-        station_id, recorded_at, cpu_temp_c, enclosure_temp_c,
-        input_voltage_v, signal_rssi_dbm, signal_quality_pct,
-        free_memory_kb, disk_usage_pct, fps, inference_ms
-    ) VALUES ($1, to_timestamp($2), $19, $20, $21, $22, $23, $24, $25, $26, $27);
-`;
-msg.params = [
-    p.station_id, p.timestamp, p.seq, p.interval_seconds,
-    p.data.vehicles.motorbike, p.data.vehicles.car, p.data.vehicles.truck, p.data.vehicles.bus,
-    p.data.vehicles.bicycle, p.data.vehicles.unknown, p.data.total,
-    p.data.direction.inbound, p.data.direction.outbound,
-    p.data.avg_confidence, p.data.min_confidence, p.data.detections_raw,
-    p.data.detections_filtered, p.data.lighting_condition,
-    p.status.cpu_temp_c, p.status.enclosure_temp_c, p.status.input_voltage_v, p.status.signal_rssi_dbm,
-    p.status.signal_quality_pct, p.status.free_memory_kb, p.status.disk_usage_pct, p.status.fps, p.status.inference_ms
-];
-return msg;"""
-
+    # insert multiple commands into a prepared statement"), so the two INSERTs in
+    # telemetry_insert.js are combined into a single statement via a data-modifying CTE
+    # instead of being two separate ";"-terminated statements.
+    telemetry_sql = _load_template("telemetry_insert.js")
     add_pipeline("telemetry", "traffic/station/+/telemetry", True, telemetry_sql)
 
     # 2. Heartbeat
-    heartbeat_sql = """var p = msg.payload;
-if (!p || !p.hardware) {
-    return null;
-}
-msg.query = `INSERT INTO hardware_metrics (
-    station_id, recorded_at, uptime_seconds, cpu_temp_c, 
-    enclosure_temp_c, input_voltage_v, signal_rssi_dbm, 
-    signal_quality_pct, free_memory_kb, disk_usage_pct, fps, 
-    inference_ms, watchdog_luckfox_ok, watchdog_esp32_ok, 
-    camera_status, last_reboot_reason
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`;
-msg.params = [p.station_id, p.timestamp, p.uptime_seconds, p.hardware.cpu_temp_c, p.hardware.enclosure_temp_c, p.hardware.input_voltage_v, p.hardware.signal_rssi_dbm, p.hardware.signal_quality_pct, p.hardware.free_memory_kb, p.hardware.disk_usage_pct, p.hardware.fps, p.hardware.inference_ms, p.watchdog.luckfox_ok, p.watchdog.esp32_ok, p.camera_status, p.last_reboot_reason];
-return msg;"""
+    heartbeat_sql = _load_template("heartbeat_insert.js")
     add_pipeline("heartbeat", "traffic/station/+/heartbeat", False, heartbeat_sql)
 
     # 3. Alert
-    alert_sql = """var p = msg.payload;
-msg.query = `INSERT INTO device_alerts (
-    station_id, alert_at, severity, code, message, details
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6)`;
-msg.params = [p.station_id, p.timestamp, p.severity, p.code, p.message, JSON.stringify(p.details || {})];
-
-// Cac ma "da phuc hoi" van co severity=info (khong phai su co) nhung van
-// dang gui Telegram de nguoi van hanh biet su co da het, khong chi im lang.
-var recoveryCodes = ['stream_recovered', 'cpu_temp_normal', 'disk_usage_normal'];
-var sendToTelegram = p.severity === 'critical' || p.severity === 'warning' || recoveryCodes.includes(p.code);
-
-if (sendToTelegram) {
-    var icon = p.severity === 'critical' ? '🚨' : (p.severity === 'warning' ? '⚠️' : '✅');
-    var timeStr = new Date(p.timestamp * 1000).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
-    // HTML thay vi Markdown: cac ma alert co dau "_" (stream_offline,
-    // cpu_temp_warning...) khien Markdown legacy cua Telegram parse loi vi no
-    // coi "_" la ky tu dac biet (in nghieng) - HTML khong co van de nay.
-    var content = `${icon} <b>${p.severity.toUpperCase()}</b>\\n` +
-        `📍 Trạm: ${p.station_id}\\n` +
-        `🕒 ${timeStr}\\n` +
-        `📋 Mã: ${p.code}\\n` +
-        `📝 ${p.message}\\n` +
-        `🔗 ${env.get("GRAFANA_URL")}`;
-    // telegram sender doc tu msg.payload, nen phai ghi de payload (khong chi
-    // mot field rieng) truoc khi no toi node do.
-    msg.telegram_payload = {
-        chatId: env.get("TELEGRAM_CHAT_ID"),
-        type: 'message',
-        content: content,
-        options: { parse_mode: 'HTML' }
-    };
-    msg.payload = msg.telegram_payload;
-}
-return msg;"""
+    alert_sql = _load_template("alert_insert.js")
     add_pipeline("alert", "traffic/station/+/alert", False, alert_sql, "check_telegram")
 
     # Add Check Telegram node and Sender
@@ -303,44 +213,22 @@ return msg;"""
     })
 
     # 4. Watchdog
-    watchdog_sql = """var p = msg.payload;
-msg.query = `INSERT INTO watchdog_events (
-    station_id, event_at, event_type, reason, details, uptime_before_reset_s, reset_count_since_boot
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7)`;
-msg.params = [p.station_id, p.timestamp, p.event, p.details.reason, JSON.stringify(p.details || {}), p.details.uptime_before_reset_s, p.details.reset_count_since_boot];
-return msg;"""
+    watchdog_sql = _load_template("watchdog_insert.js")
     add_pipeline("watchdog", "traffic/station/+/watchdog", False, watchdog_sql)
 
     # 5. Network Quality
-    network_sql = """var p = msg.payload;
-msg.query = `INSERT INTO network_quality (
-    station_id, recorded_at, operator, technology, band, rssi_dbm, rsrp_dbm, rsrq_db, sinr_db, latency_ms, packet_loss_pct, reconnect_count, bytes_sent, bytes_received, mqtt_reconnect_count
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`;
-msg.params = [p.station_id, p.timestamp, p.network.operator, p.network.technology, p.network.band, p.network.rssi_dbm, p.network.rsrp_dbm, p.network.rsrq_db, p.network.sinr_db, p.network.latency_ms, p.network.packet_loss_percent, p.network.reconnect_count, p.network.bytes_sent_total, p.network.bytes_received_total, p.network.mqtt_reconnect_count];
-return msg;"""
+    network_sql = _load_template("network_insert.js")
     add_pipeline("network", "traffic/station/+/network_quality", False, network_sql)
 
     # 6. Snapshot
-    snapshot_sql = """var p = msg.payload;
-// Giải mã base64 và lưu file (Trong thực tế Node-RED sẽ dùng file node, ở đây ta chỉ lưu metadata)
-msg.query = `INSERT INTO snapshots (
-    station_id, captured_at, format, resolution, size_bytes, lighting_condition, file_path
-) VALUES ($1, to_timestamp($2), $3, $4, $5, $6, $7)`;
-var filename = `/media/${p.station_id}_${p.timestamp}.jpeg`;
-msg.params = [p.station_id, p.timestamp, p.format, p.resolution, p.size_bytes, p.lighting_condition, filename];
-return msg;"""
+    snapshot_sql = _load_template("snapshot_insert.js")
     add_pipeline("snapshot", "traffic/station/+/snapshot", False, snapshot_sql)
 
     # 6b. AI Worker fast status pulse - fps/inference_ms only, published every
     # publish.status_interval_s (default 3s) by ai-worker/main.py, completely
     # independent of the vehicle-counting window (publish.interval_s, 10s) so
     # a faster refresh here never affects counting accuracy.
-    ai_status_sql = """var p = msg.payload;
-msg.query = `INSERT INTO hardware_metrics (
-    station_id, recorded_at, fps, inference_ms
-) VALUES ($1, to_timestamp($2), $3, $4)`;
-msg.params = [p.station_id, p.timestamp, p.fps, p.inference_ms];
-return msg;"""
+    ai_status_sql = _load_template("ai_status_insert.js")
     add_pipeline("ai_status", "traffic/station/+/ai_status", False, ai_status_sql)
 
     # 7. Accuracy HTTP Endpoint
@@ -364,7 +252,7 @@ return msg;"""
         "type": "function",
         "z": "tab1",
         "name": "Format Accuracy SQL",
-        "func": "var p = msg.payload;\nmsg.query = `INSERT INTO accuracy_evaluations (\n    station_id, eval_start, eval_end, lighting_condition, evaluator_name,\n    manual_motorbike, manual_car, manual_truck, manual_bus, manual_bicycle, manual_total,\n    ai_motorbike, ai_car, ai_truck, ai_bus, ai_bicycle, ai_total,\n    accuracy_overall_pct, accuracy_motorbike_pct, accuracy_car_pct, accuracy_truck_pct, accuracy_bus_pct,\n    notes\n) VALUES (\n    $1, to_timestamp($2), to_timestamp($3), $4, $5,\n    $6, $7, $8, $9, $10, $11,\n    $12, $13, $14, $15, $16, $17,\n    $18, $19, $20, $21, $22,\n    $23\n)`;\nmsg.params = [\n    p.station_id, p.eval_start, p.eval_end, p.lighting_condition, p.evaluator_name,\n    p.manual_motorbike, p.manual_car, p.manual_truck, p.manual_bus, p.manual_bicycle, p.manual_total,\n    p.ai_motorbike, p.ai_car, p.ai_truck, p.ai_bus, p.ai_bicycle, p.ai_total,\n    p.accuracy_overall_pct, p.accuracy_motorbike_pct, p.accuracy_car_pct, p.accuracy_truck_pct, p.accuracy_bus_pct,\n    p.notes\n];\nreturn msg;",
+        "func": _load_template("accuracy_insert.js"),
         "outputs": 1,
         "x": 400,
         "y": y_pos,
