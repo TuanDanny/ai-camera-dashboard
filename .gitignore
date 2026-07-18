@@ -48,3 +48,8 @@ nodered/flows.json
 # Host-side process logs from run.sh (headless fallback)
 edge-rpi/edge_agent.log
 ai-worker/ai_worker.log
+edge-rpi/agent.log
+
+# HailoRT ghi log runtime vao cwd cua tien trinh dang goi no (main.py)
+hailort*.log
+ai-worker/hailort*.log

@@ -1,4 +1,9 @@
-from direction_counter import DirectionCounter
+import sys
+
+AI_WORKER_DIR = "/home/shtp/ai-camera-dashboard/ai-worker"
+sys.path.insert(0, AI_WORKER_DIR)
+
+from direction_counter import DirectionCounter  # noqa: E402
 
 FRAME_H = 720  # line_y = 720 * 0.5 = 360
 

@@ -81,6 +81,11 @@ sys.modules["ultralytics"] = ultralytics_mod
 # ---- Gio moi import main.py THAT ----
 import main  # noqa: E402
 
+# Test nay chi kiem chung nhanh cpu (FakeYOLO o tren) - ep bat ke
+# ai-worker/config.yaml that tren may dang de backend gi (vd: hailo, neu
+# may nay co NPU that), tranh no dam vao phan cung Hailo that va treo.
+main.MODEL_BACKEND = 'cpu'
+
 print("\n=== import main.py THANH CONG (khong bi UnboundLocalError khi dinh nghia module) ===\n")
 
 print("=== Goi process_stream() that, quan sat trong ~35 giay ===\n")

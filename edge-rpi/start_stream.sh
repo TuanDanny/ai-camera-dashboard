@@ -16,13 +16,16 @@ STATION_ID=$(get_config_val "station_id")
 SERVER_HOST=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "host:" | cut -d':' -f2- | tr -d ' "''')
 RTSP_PORT=$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "mediamtx_rtsp_port:" | cut -d':' -f2- | tr -d ' "''')
 
-WIDTH=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')
-HEIGHT=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')
-FPS=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')
-BITRATE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')
-CAMERA_TYPE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')
-DEVICE=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')
-CAMERA_URL=$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')
+WIDTH=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')
+HEIGHT=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')
+FPS=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')
+BITRATE=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')
+CAMERA_TYPE=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')
+DEVICE=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')
+CAMERA_URL=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')
+BRIGHTNESS=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "^[[:space:]]*brightness:" | cut -d':' -f2- | tr -d ' "''')
+GAMMA=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "^[[:space:]]*gamma:" | cut -d':' -f2- | tr -d ' "''')
+BACKLIGHT_COMP=$(grep -A 15 "^camera:" "$CONFIG_FILE" | grep "^[[:space:]]*backlight_compensation:" | cut -d':' -f2- | tr -d ' "''')
 
 RTSP_URL="rtsp://$SERVER_HOST:$RTSP_PORT/$STATION_ID"
 
@@ -46,9 +49,25 @@ if [ "$CAMERA_TYPE" == "csi" ]; then
 elif [ "$CAMERA_TYPE" == "webcam" ]; then
     # USB Webcam (using ffmpeg)
     echo "[INFO] Executing USB Webcam ffmpeg stream..."
-    # Check if webcam supports H264 hardware encoding directly, else transpile
+    if command -v v4l2-ctl >/dev/null 2>&1; then
+        V4L2_CTRLS=""
+        [ -n "$BRIGHTNESS" ] && V4L2_CTRLS="brightness=$BRIGHTNESS"
+        [ -n "$GAMMA" ] && V4L2_CTRLS="${V4L2_CTRLS:+$V4L2_CTRLS,}gamma=$GAMMA"
+        [ -n "$BACKLIGHT_COMP" ] && V4L2_CTRLS="${V4L2_CTRLS:+$V4L2_CTRLS,}backlight_compensation=$BACKLIGHT_COMP"
+        if [ -n "$V4L2_CTRLS" ]; then
+            echo "[INFO] Chinh do sang camera (v4l2-ctl --set-ctrl=$V4L2_CTRLS)..."
+            v4l2-ctl -d "$DEVICE" --set-ctrl="$V4L2_CTRLS" || \
+                echo "[WARN] Khong chinh duoc v4l2 controls - camera co the khong ho tro cac control nay."
+        fi
+    fi
+    # Thu truoc: camera co ho tro xuat H264 phan cung truc tiep khong
+    # (-codec:v h264 la dinh dang input rieng, khong dung chung voi mjpeg).
     ffmpeg -re -f v4l2 -codec:v h264 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec copy -f rtsp -rtsp_transport tcp "$RTSP_URL" || \
-    ffmpeg -re -f v4l2 -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "$RTSP_URL"
+    # Fallback: da so USB webcam (vd Xitech) chi ho tro FPS cao (25-30fps)
+    # o dang nen MJPG - neu khong ep dinh dang, ffmpeg co the tu chon YUYV
+    # (thuong chi dat ~10fps o do phan giai 720p), gay hinh anh bi toi/hong
+    # do camera khong dap ung kip toc do khung hinh yeu cau.
+    ffmpeg -re -f v4l2 -input_format mjpeg -s "${WIDTH}x${HEIGHT}" -r "$FPS" -i "$DEVICE" -an -vcodec libx264 -preset ultrafast -pix_fmt yuv420p -f rtsp -rtsp_transport tcp "$RTSP_URL"
 elif [ "$CAMERA_TYPE" == "ip_webcam" ]; then
     # Android "IP Webcam" app - HTTP MJPEG source, always needs transcoding
     # to H264 (no hardware passthrough possible from an MJPEG source).

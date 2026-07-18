@@ -21,6 +21,14 @@ camera:
   height: 720
   fps: 25
   bitrate: 2500000
+  # Chi ap dung cho type: webcam (USB) - dieu chinh do sang qua v4l2-ctl
+  # neu hinh anh bi toi (xem `v4l2-ctl -d /dev/videoX --list-ctrls` de biet
+  # khoang gia tri cua camera dang dung). Bo comment va chinh so neu can,
+  # de nguyen (comment) neu camera da du sang - gia tri mac dinh cua da
+  # phan lon webcam la brightness=0, gamma=300, backlight_compensation=0.
+  # brightness: 30              # thuong -64..64
+  # gamma: 400                  # thuong 100..500
+  # backlight_compensation: 1   # thuong 0..2
 
 stream:
   protocol: rtsp

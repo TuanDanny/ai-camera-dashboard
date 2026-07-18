@@ -1,4 +1,9 @@
-from vehicle_classifier import VehicleClassifier
+import sys
+
+AI_WORKER_DIR = "/home/shtp/ai-camera-dashboard/ai-worker"
+sys.path.insert(0, AI_WORKER_DIR)
+
+from vehicle_classifier import VehicleClassifier  # noqa: E402
 
 
 def main():

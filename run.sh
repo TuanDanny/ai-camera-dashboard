@@ -1,178 +1,55 @@
 #!/bin/bash
-echo "Starting SHTP Traffic Server..."
-
-# Resolve paths relative to this script's own location, not the caller's cwd
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
-if [ ! -f ".env" ]; then
-    echo "[INFO] .env file not found. Creating from .env.example..."
-    cp .env.example .env
-    echo "[WARN] .env still has placeholder values - edit it with real credentials before relying on this deploy."
-else
-    echo "[INFO] .env file exists."
-fi
+export DISPLAY=:0
+export WAYLAND_DISPLAY=wayland-0
+export XDG_RUNTIME_DIR=/run/user/1000
 
-echo "[INFO] Setting up directory permissions..."
-mkdir -p postgres/data grafana/data mosquitto/data mosquitto/log
-chmod -R 777 grafana/data 2>/dev/null || true
-chmod -R 777 mosquitto/data 2>/dev/null || true
-chmod -R 777 mosquitto/log 2>/dev/null || true
+echo "========================================================="
+echo "       SHTP AI CAMERA - MASTER CONTROL PANEL"
+echo "========================================================="
+echo "  1) Chay he thong ngam (Systemd)"
+echo "  2) Tat toan bo he thong"
+echo "  3) DEMO FULL: Mo cac Terminal rieng biet (Agent + AI/View)"
+echo "========================================================="
+read -p "Chon thao tac (1-3): " CHOICE
 
-if [ ! -f "mosquitto/passwd" ]; then
-    echo "[INFO] mosquitto/passwd file not found. Creating from passwd.example..."
-    cp mosquitto/passwd.example mosquitto/passwd
-fi
-
-if [ ! -f "ai-worker/config.yaml" ]; then
-    echo "[INFO] ai-worker/config.yaml not found. Creating from config.yaml.example..."
-    cp ai-worker/config.yaml.example ai-worker/config.yaml
-    echo "[WARN] ai-worker/config.yaml still has placeholder values - edit mqtt_password and streams before running ai-worker."
-fi
-
-if [ ! -f "edge-rpi/config.yaml" ]; then
-    echo "[INFO] edge-rpi/config.yaml not found. Creating from config.yaml.example..."
-    cp edge-rpi/config.yaml.example edge-rpi/config.yaml
-    echo "[WARN] edge-rpi/config.yaml still has placeholder values - edit mqtt password and camera url before running edge_agent.py."
-fi
-
-EDGE_CONFIG="$DIR/edge-rpi/config.yaml"
-
-get_camera_field() {
-    grep -A 9 "^camera:" "$EDGE_CONFIG" | grep "^  $1:" | head -n1 | cut -d':' -f2- | sed 's/^ *//;s/ *$//'
-}
-
-set_camera_field() {
-    # Only touches lines inside the camera: block (up to the next top-level key)
-    sed -i "/^camera:/,/^[a-zA-Z]/ s|^\(  $1:\).*|\1 $2|" "$EDGE_CONFIG"
-}
-
-echo ""
-echo "[SETUP] Chon nguon camera cho tram nay:"
-echo "  1) Raspberry Pi Camera Module (CSI)"
-echo "  2) IP Webcam (dien thoai Android, app IP Webcam)"
-CURRENT_CAM_TYPE=$(get_camera_field "type")
-read -p "Nhap 1 hoac 2 (Enter de giu nguyen '${CURRENT_CAM_TYPE}'): " CAMERA_CHOICE
-
-case "$CAMERA_CHOICE" in
+case "$CHOICE" in
     1)
-        set_camera_field "type" "csi"
-        echo "[INFO] Da dat camera.type = csi trong edge-rpi/config.yaml."
-        CSI_TOOL=$(command -v rpicam-hello || command -v libcamera-hello)
-        if [ -n "$CSI_TOOL" ]; then
-            if timeout 5 "$CSI_TOOL" --list-cameras 2>&1 | grep -qi "no cameras available"; then
-                echo "[WARN] Chua phat hien camera CSI nao cam vao - kiem tra lai day/ket noi. Cau hinh van duoc luu, ban co the cam camera sau va chay lai."
-            else
-                echo "[INFO] Da phat hien camera CSI."
-            fi
-        fi
+        sudo systemctl start shtp_docker shtp_agent shtp_camera
+        echo "[OK] He thong dang chay ngam."
         ;;
     2)
-        set_camera_field "type" "ip_webcam"
-        CURRENT_URL=$(get_camera_field "url")
-        ATTEMPT=0
-        while true; do
-            read -p "Nhap URL IP Webcam (Enter de giu '${CURRENT_URL}'): " NEW_URL
-            NEW_URL="${NEW_URL:-$CURRENT_URL}"
-            echo "[INFO] Dang kiem tra ket noi toi $NEW_URL ..."
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 5 "$NEW_URL" 2>/dev/null)
-            if [[ "$HTTP_CODE" =~ ^2 ]]; then
-                echo "[INFO] Ket noi thanh cong (HTTP $HTTP_CODE)."
-                set_camera_field "url" "$NEW_URL"
-                break
-            fi
-
-            ATTEMPT=$((ATTEMPT + 1))
-            echo "[WARN] Khong ket noi duoc toi $NEW_URL (HTTP: ${HTTP_CODE:-timeout})."
-            CURRENT_URL="$NEW_URL"
-            if [ "$ATTEMPT" -ge 3 ]; then
-                read -p "Da thu $ATTEMPT lan khong duoc. Van dung URL nay va tiep tuc? (y/N): " FORCE
-                if [[ "$FORCE" =~ ^[Yy]$ ]]; then
-                    set_camera_field "url" "$NEW_URL"
-                    break
-                fi
-                ATTEMPT=0
-            fi
-        done
+        sudo systemctl stop shtp_camera shtp_agent shtp_docker
+        sudo pkill -9 -f edge_agent.py
+        sudo pkill -9 -f main.py
+        echo "[OK] Da tat toan bo."
+        ;;
+    3)
+        echo "[INFO] Dang tat cac tien trinh cu de giai phong NPU..."
+        sudo systemctl stop shtp_camera shtp_agent
+        sudo pkill -9 -f edge_agent.py
+        sudo pkill -9 -f main.py
+        
+        echo "[INFO] Doi 3 giay de chip Hailo NPU duoc giai phong hoan toan..."
+        sleep 3
+        
+        echo "[INFO] Dang mo cac Terminal..."
+        sudo systemctl start shtp_docker
+        
+        # Terminal 1: Edge Agent (Stream Camera)
+        lxterminal --title="Edge Agent (Camera Stream)" -e bash -c "cd '$DIR/edge-rpi' && /home/shtp/yolo-cam/.venv/bin/python edge_agent.py; echo '[Da dong]'; exec bash" &
+        
+        sleep 2
+        
+        # Terminal 2: AI Worker + View (Dashboard + GUI)
+        # Dung .venv-view/bin/python3 vi no chay GUI va NPU on dinh nhat
+        lxterminal --title="AI Worker (Dashboard + View)" -e bash -c "cd '$DIR/ai-worker' && .venv-view/bin/python3 main.py --view; echo '[Da dong]'; exec bash" &
+        
+        echo "[OK] Da mo 2 Terminal tren man hinh Pi!"
         ;;
     *)
-        echo "[INFO] Giu nguyen cau hinh camera hien tai (type=${CURRENT_CAM_TYPE})."
+        echo "Thoat."
         ;;
 esac
-
-echo "[INFO] Generating nodered/flows.json from generate_flows.py..."
-set -a
-source .env
-set +a
-python3 generate_flows.py
-
-echo "[INFO] Launching Docker containers..."
-sudo docker compose up -d
-
-echo "[INFO] Waiting a few seconds for Mosquitto/Postgres to settle before starting the edge/AI processes..."
-sleep 5
-
-PROCESSES_STARTED=false
-AI_WORKER_VENV="$DIR/ai-worker/.venv/bin/python3"
-if [ ! -x "$AI_WORKER_VENV" ]; then
-    echo ""
-    echo "[WARN] ai-worker/.venv not found - skipping edge_agent.py and main.py."
-    echo "        Set it up once with:"
-    echo "          cd '$DIR/ai-worker' && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
-    echo "        Then run this script again."
-else
-    TERMINAL=""
-    for t in x-terminal-emulator lxterminal xterm; do
-        if command -v "$t" >/dev/null 2>&1; then
-            TERMINAL="$t"
-            break
-        fi
-    done
-
-    if [ -n "$DISPLAY" ] && [ -n "$TERMINAL" ]; then
-        echo "[INFO] Opening edge_agent.py and ai-worker/main.py in their own terminal windows ($TERMINAL)..."
-        "$TERMINAL" -e bash -c "cd '$DIR/edge-rpi' && '$AI_WORKER_VENV' -u edge_agent.py; echo; echo '[edge_agent.py stopped]'; exec bash" &
-        sleep 1
-        "$TERMINAL" -e bash -c "cd '$DIR/ai-worker' && '$AI_WORKER_VENV' -u main.py; echo; echo '[main.py stopped]'; exec bash" &
-    else
-        # Note: the shared logs/ directory is owned by the docker containers
-        # (root), not this user, so these host-side process logs live next
-        # to their own scripts instead.
-        EDGE_LOG="$DIR/edge-rpi/edge_agent.log"
-        AI_LOG="$DIR/ai-worker/ai_worker.log"
-        echo "[INFO] No graphical display detected (running headless/over SSH) - starting edge_agent.py and main.py in the background instead."
-        echo "       Logs: $EDGE_LOG and $AI_LOG"
-        (cd "$DIR/edge-rpi" && nohup "$AI_WORKER_VENV" -u edge_agent.py > "$EDGE_LOG" 2>&1 &)
-        (cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
-        echo "       Tail them with: tail -f '$EDGE_LOG' '$AI_LOG'"
-    fi
-    PROCESSES_STARTED=true
-fi
-
-echo ""
-echo "========================================================="
-echo " SHTP TRAFFIC SERVER IS RUNNING!"
-echo "========================================================="
-echo " - Grafana Dashboard: http://localhost:3000 (see .env for admin login)"
-echo " - Node-RED Flow:     http://localhost:1880"
-echo " - MQTT Broker:       localhost:1883"
-echo "========================================================="
-
-if [ "$PROCESSES_STARTED" = true ]; then
-    echo ""
-    read -p "Ban co muon mo view_stream.py de xem truc tiep stream dang duoc AI xu ly khong? (y/N): " SHOW_STREAM
-    if [[ "$SHOW_STREAM" =~ ^[Yy]$ ]]; then
-        VIEW_VENV="$DIR/ai-worker/.venv-view/bin/python3"
-        if [ -z "$DISPLAY" ]; then
-            echo "[WARN] Khong phat hien man hinh do hoa (bien DISPLAY trong) - view_stream.py can giao dien GUI de hien cua so video, khong mo duoc qua SSH thuan. Bo qua."
-        elif [ ! -x "$VIEW_VENV" ]; then
-            echo "[WARN] Khong tim thay $VIEW_VENV - can venv rieng co opencv GUI cho view_stream.py. Cai 1 lan bang:"
-            echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml"
-        else
-            echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
-            sleep 3
-            echo "[INFO] Nhan Q hoac ESC tren cua so video de dong va tiep tuc."
-            (cd "$DIR/ai-worker" && "$VIEW_VENV" view_stream.py)
-        fi
-    fi
-fi
