@@ -136,20 +136,26 @@ if [ "$PROCESSES_STARTED" = true ]; then
         elif [ ! -x "$VIEW_VENV" ]; then
             echo "[WARN] Khong tim thay $VIEW_VENV - can venv rieng co opencv GUI cho view_stream.py. Cai 1 lan bang:"
             echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install ultralytics opencv-python ncnn pyyaml"
-            echo "        Neu may co NPU Hailo va muon dung 'view_stream.py --backend hailo', .venv-view"
-            echo "        can them wiring toi hailo_platform/picamera2 cua he thong (file .pth) va cai"
-            echo "        them lap/cython_bbox/scipy - mac dinh script nay da tu ep dung backend cpu nen"
-            echo "        khong bat buoc phai lam buoc do."
+            echo "        Mac dinh script nay dung 'view_stream.py --backend relay' (chi nhan lai ket qua"
+            echo "        da xu ly san tu main.py qua socket, khong tu chay YOLO rieng nua). Neu muon tu"
+            echo "        chay YOLO rieng qua NPU ('view_stream.py --backend hailo', phai tat main.py"
+            echo "        truoc), .venv-view can them wiring toi hailo_platform/picamera2 cua he thong"
+            echo "        (file .pth) va cai them lap/cython_bbox/scipy."
         else
             echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
             sleep 3
             echo "[INFO] Nhan Q hoac ESC tren cua so video de dong va tiep tuc."
-            # main.py da chay san (co the dang giu NPU Hailo neu backend=hailo) -
-            # ep view_stream.py dung backend cpu de tranh loi
+            # main.py da chay san va LUON phat lai ket qua da xu ly (frame +
+            # box + fps) qua socket noi bo, bat ke dang dung backend cpu hay
+            # hailo (xem FrameBroadcaster trong main.py). Dung
+            # "--backend relay" de view_stream.py chi nhan lai ket qua co
+            # san nay ma hien thi - KHONG tu chay YOLO rieng (nhe hon backend
+            # cpu cu) va KHONG dung toi NPU nen khong bao gio dung do
             # HAILO_OUT_OF_PHYSICAL_DEVICES (2 tien trinh OS rieng biet khong
-            # the cung mo 1 NPU vat ly). Muon xem qua chinh NPU thi phai tat
-            # main.py truoc roi tu chay "view_stream.py --backend hailo" tay.
-            (cd "$DIR/ai-worker" && "$VIEW_VENV" view_stream.py --backend cpu)
+            # the cung mo 1 NPU vat ly). Muon xem qua chinh NPU (nang hon,
+            # chi de debug rieng) thi phai tat main.py truoc roi tu chay
+            # "view_stream.py --backend hailo" tay.
+            (cd "$DIR/ai-worker" && "$VIEW_VENV" view_stream.py --backend relay)
         fi
     fi
 fi

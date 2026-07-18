@@ -87,15 +87,13 @@ nhau theo mục đích:
   hạn phần cứng thật), chỉ có thể báo lỗi rõ ràng và hướng dẫn dùng CPU
   thay thế.
 
-**Vì giới hạn trên, `view_stream.py` có cờ `--backend {cpu,hailo}`** để
-ép chạy CPU khi `main.py` đang giữ NPU (xem cũng lúc mà không tranh
-chấp), hoặc chạy `hailo` khi `main.py` không hoạt động (được toàn quyền
-NPU, tốc độ cao). `run.sh` khi tự mở `view_stream.py` (ở bước cuối, sau
-khi hỏi "Bạn có muốn xem trực tiếp...") **luôn ép `--backend cpu`** vì nó
-giả định `main.py` đã chạy trước đó — nên tốc độ xem trực tiếp qua
-`run.sh` sẽ chậm hơn (~5-10fps, CPU) so với số liệu FPS thật trên
-dashboard (~40-46fps, NPU) — đây là 2 tiến trình độc lập đo 2 thứ khác
-nhau, không phải lỗi.
+**Vì giới hạn trên, `view_stream.py` có cờ `--backend {cpu,hailo,relay}`**
+— `relay` (mặc định khi `run.sh` tự mở) không đụng tới NPU/CPU YOLO gì cả,
+chỉ nhận lại kết quả `main.py` đã xử lý sẵn qua 1 socket nội bộ (xem mục
+7) nên không bao giờ tranh chấp NPU với `main.py`, đồng thời FPS hiển thị
+gần với FPS thật của `main.py` hơn nhiều so với việc tự chạy lại YOLO trên
+CPU. `cpu`/`hailo` vẫn còn để tự chạy YOLO riêng khi cần (vd `main.py`
+chưa chạy, hoặc muốn debug riêng qua chính NPU sau khi tắt `main.py`).
 
 ## 5. Đa camera (nhiều luồng RTSP cùng lúc)
 
@@ -107,7 +105,47 @@ station cùng đọc 1 nguồn RTSP để giả lập, khác `station_id`): khô
 crash, cả 2 đều publish MQTT bình thường, FPS mỗi luồng dao động
 24.5-43.4fps.
 
-## 6. Cách bật NPU
+## 6. Chia sẻ kết quả NPU cho `view_stream.py` qua socket (không chạy 2 lần YOLO)
+
+Trước đây `view_stream.py` tự chạy YOLO riêng (CPU) để xem trực tiếp,
+song song với `main.py` đang chạy YOLO/NPU thật cho dashboard — lãng phí
+tài nguyên và khiến FPS xem (~5-10fps CPU) lệch xa FPS thật
+(~40-46fps NPU), dễ gây hiểu lầm là NPU chậm.
+
+`ai-worker/pipeline/frame_broadcast.py` giải quyết việc này bằng 1 Unix
+domain socket nội bộ (`/tmp/shtp_ai_worker_view.sock`):
+
+- **`FrameBroadcaster`** (chạy trong `main.py`): sau mỗi khung xử lý xong
+  (bất kể `main.py` đang dùng backend `cpu` hay `hailo`), gọi
+  `publish(station_id, frame, boxes, inference_ms, fps)` — chỉ ghi đè 1
+  biến "hộp thư 1 ngăn" (cực nhanh, không bao giờ làm chậm vòng lặp xử lý
+  chính). Việc mã hoá JPEG + gửi qua socket (chậm hơn) chạy ở 1 thread nền
+  riêng (`_sender_loop`). Giao thức: 2 phần length-prefixed (4 byte đầu
+  ghi độ dài) — JSON metadata nhỏ (không có ảnh) rồi tới khối JPEG nhị
+  phân thô (không dùng base64 — từng thử base64 nhưng làm ảnh phình thêm
+  ~33% dung lượng mà không giải quyết được gốc vấn đề tốc độ, xem
+  `npu_plan.md`). Client kết nối vào nhưng không đọc (treo/GUI đứng) được
+  xử lý bằng `settimeout()` trên kết nối để không làm `sendall()` chặn vô
+  thời hạn.
+- **`socket_frame_source()`** (dùng trong `view_stream.py` khi
+  `--backend relay`): generator phía client, kết nối vào socket trên,
+  nhận + giải mã, `yield (frame, boxes, inference_ms, fps)` — **cùng hình
+  dạng interface** với `cpu_frame_source()`/`hailo_frame_source()` nên
+  vòng lặp vẽ/hiển thị trong `view_stream.py` dùng chung, không cần biết
+  đang ở chế độ nào. Chỉ hỗ trợ 1 client tại 1 thời điểm (đúng nhu cầu
+  thực tế — chỉ 1 người xem debug).
+
+**Giới hạn tốc độ đã đo thật**: FPS hiển thị qua relay đạt ổn định
+~20fps (không phụ thuộc base64 hay không — đã kiểm chứng cả 2 trường
+hợp), thấp hơn FPS thật của NPU (~40-46fps). Nguyên nhân là **tranh chấp
+CPU tổng thể trên Raspberry Pi 4 core** (giữa `ffmpeg` mã hoá camera,
+`main.py`'s pipeline NPU, và thread mã hoá/gửi JPEG), không phải giới hạn
+của giao thức — đường ống IPC tự nó đo được tới ~63fps khi không có
+`main.py` thật chạy song song. ~20fps vẫn đủ mượt cho mục đích xem debug
+trực tiếp; số đếm xe thật (MQTT) hoàn toàn không đi qua đường này nên
+không bị ảnh hưởng.
+
+## 7. Cách bật NPU
 
 Trong `ai-worker/config.yaml`:
 ```yaml
