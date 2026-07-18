@@ -6,6 +6,7 @@ import struct
 import threading
 
 import cv2
+import numpy as np
 
 DEFAULT_SOCKET_PATH = "/tmp/shtp_ai_worker_view.sock"
 JPEG_QUALITY = 80
@@ -147,3 +148,65 @@ class FrameBroadcaster:
         self._sender_thread.join(timeout=2)
         if os.path.exists(self.socket_path):
             os.remove(self.socket_path)
+
+
+def _recv_exact(sock, n):
+    """Doc dung n byte tu socket (recv() co the tra ve it hon n byte moi
+    lan goi - phai lap lai cho du). Tra ve None neu ket noi bi dong giua
+    chung (EOF) truoc khi du n byte."""
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            return None
+        buf += chunk
+    return buf
+
+
+def socket_frame_source(socket_path=DEFAULT_SOCKET_PATH, connect_timeout=5.0):
+    """Generator phia client: ket noi vao FrameBroadcaster dang chay trong
+    main.py, nhan lien tuc, giai ma, yield (frame, boxes, inference_ms,
+    fps) - CUNG hinh dang voi cpu_frame_source()/hailo_frame_source() de
+    view_stream.py dung chung 1 vong lap ve/hien thi, khong doi gi.
+
+    Khac voi cpu_frame_source/hailo_frame_source, ham nay KHONG tu chay
+    YOLO - chi nhan lai ket qua da tinh san tu main.py (NPU), nen ben goi
+    (view_stream.py) hau nhu khong ton CPU cho inference nua.
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(connect_timeout)
+    try:
+        sock.connect(socket_path)
+    except (FileNotFoundError, ConnectionRefusedError, socket.timeout) as e:
+        raise RuntimeError(
+            f"Khong ket noi duoc toi main.py qua socket '{socket_path}' - "
+            f"main.py co dang chay va co bat FrameBroadcaster (backend "
+            f"hailo) khong?"
+        ) from e
+    sock.settimeout(None)  # ve blocking mode binh thuong cho vong doc chinh
+
+    try:
+        while True:
+            header = _recv_exact(sock, 4)
+            if header is None:
+                raise RuntimeError(
+                    "Mat ket noi toi main.py (co the main.py da bi tat) - "
+                    "khong con nhan duoc du lieu qua socket nua."
+                )
+            body_len = struct.unpack('>I', header)[0]
+            body = _recv_exact(sock, body_len)
+            if body is None:
+                raise RuntimeError(
+                    "main.py dong ket noi giua chung luc dang gui du lieu."
+                )
+            payload = json.loads(body.decode('utf-8'))
+
+            jpeg_bytes = base64.b64decode(payload["jpeg_b64"])
+            frame = cv2.imdecode(np.frombuffer(jpeg_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+            boxes = [tuple(b) for b in payload["boxes"]]
+            inference_ms = payload["inference_ms"]
+            fps = payload["fps"]
+
+            yield frame, boxes, inference_ms, fps
+    finally:
+        sock.close()
