@@ -82,6 +82,10 @@ services:
       GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Mac dinh Grafana loc sach (sanitize) HTML trong panel Text, xoa
+      # mat the <img> - can bat co nay de panel "Live Camera View" (MJPEG)
+      # trong traffic_overview.json hien thi duoc.
+      GF_PANELS_DISABLE_SANITIZE_HTML: "true"
       # Grafana's built-in default (5s) would silently clamp the 3s refresh
       # set on each dashboard - lower the floor so that actually takes effect.
       GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 2s

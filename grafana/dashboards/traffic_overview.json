@@ -9,7 +9,7 @@
       "title": "Total Vehicles Today",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 12, "w": 6, "x": 0, "y": 0 },
       "targets": [
         {
           "format": "time_series",
@@ -24,7 +24,7 @@
       "title": "Total Motorbikes Today",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 5, "w": 4, "x": 6, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 6, "y": 0 },
       "targets": [
         {
           "format": "time_series",
@@ -44,7 +44,7 @@
       "title": "Total Cars Today",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 5, "w": 4, "x": 10, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 10, "y": 0 },
       "targets": [
         {
           "format": "time_series",
@@ -64,7 +64,7 @@
       "title": "Total Trucks Today",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 5, "w": 4, "x": 14, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 6, "y": 6 },
       "targets": [
         {
           "format": "time_series",
@@ -84,7 +84,7 @@
       "title": "Total Buses Today",
       "type": "stat",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 5, "w": 4, "x": 18, "y": 0 },
+      "gridPos": { "h": 6, "w": 4, "x": 10, "y": 6 },
       "targets": [
         {
           "format": "time_series",
@@ -100,11 +100,22 @@
       }
     },
     {
+      "id": 21,
+      "title": "Live Camera View (MJPEG qua main.py, port 8090)",
+      "description": "Anh da duoc ve san box/nhan ngay trong main.py (khong chay YOLO lan 2). Doi bien 'pi_host' o thanh cong cu dashboard neu xem tu may khac trong LAN (mac dinh localhost chi dung khi xem ngay tren Pi).",
+      "type": "text",
+      "gridPos": { "h": 12, "w": 10, "x": 14, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000;\"><img src=\"http://$pi_host:8090/stream?on=$live_view\" style=\"max-width:100%;max-height:100%;object-fit:contain;\" alt=\"Khong tai duoc live view - kiem tra main.py co dang chay va bien pi_host o tren dashboard co dung IP khong\"/></div>"
+      }
+    },
+    {
       "id": 2,
       "title": "Vehicles over Time",
       "type": "timeseries",
       "datasource": "PostgreSQL",
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 },
       "targets": [
         {
           "format": "time_series",
@@ -115,6 +126,31 @@
       ]
     }
   ],
+  "templating": {
+    "list": [
+      {
+        "name": "pi_host",
+        "type": "textbox",
+        "label": "IP/host cua Pi (cho Live Camera View)",
+        "description": "localhost neu xem ngay tren Pi; doi thanh IP LAN cua Pi (vd 192.168.1.50, xem terminal luc chay run.sh) neu xem tu may khac cung mang",
+        "current": { "value": "localhost", "text": "localhost" },
+        "query": "localhost",
+        "options": [{ "value": "localhost", "text": "localhost", "selected": true }]
+      },
+      {
+        "name": "live_view",
+        "type": "custom",
+        "label": "Live view",
+        "description": "Tat mac dinh de khong ton CPU main.py ve/encode lien tuc - bam Bat khi thuc su muon xem.",
+        "query": "🔴 Tắt : 0,🟢 Bật : 1",
+        "current": { "value": "0", "text": "🔴 Tắt" },
+        "options": [
+          { "value": "0", "text": "🔴 Tắt", "selected": true },
+          { "value": "1", "text": "🟢 Bật", "selected": false }
+        ]
+      }
+    ]
+  },
   "schemaVersion": 39,
-  "version": 4
+  "version": 7
 }

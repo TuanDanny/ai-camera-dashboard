@@ -1,8 +1,11 @@
+import http.server
 import json
 import os
 import socket
 import struct
 import threading
+import time
+import urllib.parse
 
 import cv2
 import numpy as np
@@ -14,6 +17,125 @@ JPEG_QUALITY = 80
 # _accept_loop). socket.timeout la alias cua TimeoutError, la subclass cua
 # OSError - da duoc bat dung boi "except OSError" co san trong _sender_loop.
 SEND_TIMEOUT_S = 0.3
+
+# MJPEG-over-HTTP: de nhung truc tiep vao panel "Text" (HTML) cua Grafana
+# qua the <img src=".../stream">, khong can plugin/JS gi ca - trinh duyet
+# tu render multipart/x-mixed-replace nhu anh dong. Khac voi Unix socket
+# (gui frame goc + box roi, client tu ve), o day PHAI ve box+nhan luon
+# vao anh truoc khi encode vi <img> khong chay duoc code de tu ve.
+MJPEG_HTTP_PORT = 8090
+MJPEG_POLL_INTERVAL_S = 0.05  # ~20fps cho xem qua dashboard - du muot,
+                              # khong can bang FPS NPU that (45+fps se
+                              # ton CPU ve/encode nhieu hon can thiet cho
+                              # muc dich xem tong quan qua web).
+_MJPEG_COCO_MAP = {3: "motorbike", 2: "car", 7: "truck", 5: "bus", 1: "bicycle"}
+
+
+def _draw_boxes_for_mjpeg(frame, boxes):
+    """Ve box + nhan len 1 BAN SAO cua frame (KHONG sua frame goc - frame
+    goc con duoc dung chung boi Unix socket sender de gui cho
+    view_stream.py, sua tai cho se lam "lem" box vao ca duong do)."""
+    annotated = frame.copy()
+    for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
+        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
+        category = _MJPEG_COCO_MAP.get(cls_id, "unknown")
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        label = f"ID {track_id} {category} {confidence:.2f}"
+        cv2.putText(
+            annotated, label, (x1, max(y1 - 10, 20)),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+        )
+    return annotated
+
+
+_off_placeholder_cache = None
+
+
+def _get_off_placeholder_jpeg():
+    """Anh tinh 'da tat' - tra ve ngay lap tuc (khong stream) khi query param
+    ?on=0, de nut bat/tat tren Grafana thuc su ngung ton CPU ve/encode ben
+    main.py, khong chi an giao dien. Cache lai vi noi dung khong doi."""
+    global _off_placeholder_cache
+    if _off_placeholder_cache is None:
+        img = np.zeros((360, 640, 3), dtype=np.uint8)
+        cv2.putText(
+            img, "Live view dang TAT", (60, 170),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.0, (128, 128, 128), 2, cv2.LINE_AA
+        )
+        cv2.putText(
+            img, "Bam nut Bat o thanh cong cu de xem", (60, 210),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (100, 100, 100), 1, cv2.LINE_AA
+        )
+        ok, buf = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+        _off_placeholder_cache = buf.tobytes() if ok else b''
+    return _off_placeholder_cache
+
+
+class _MJPEGRequestHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass  # im lang - khong spam stdout cua main.py moi request
+
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != '/stream':
+            self.send_error(404)
+            return
+        query = urllib.parse.parse_qs(parsed.query)
+        # Mac dinh "1" (bat) de van test truc tiep duoc qua curl/browser
+        # khong can query param - nut bat/tat tren Grafana se luon gui
+        # ro rang ?on=0 hoac ?on=1.
+        is_on = query.get('on', ['1'])[0] != '0'
+        if not is_on:
+            # TAT: tra ve 1 anh tinh DUY NHAT roi dong ket noi ngay - hoan
+            # toan khong dong cham toi broadcaster._latest/ve box/encode
+            # lien tuc, dung y muon "bam tat la het ton CPU main.py".
+            placeholder = _get_off_placeholder_jpeg()
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/jpeg')
+            self.send_header('Content-Length', str(len(placeholder)))
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.end_headers()
+            try:
+                self.wfile.write(placeholder)
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                pass
+            return
+
+        broadcaster = self.server.broadcaster
+        try:
+            self.send_response(200)
+            self.send_header('Age', '0')
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+            self.end_headers()
+            while not broadcaster._stop_flag.is_set():
+                with broadcaster._latest_lock:
+                    item = broadcaster._latest
+                if item is not None:
+                    _, frame, boxes, _, _ = item
+                    annotated = _draw_boxes_for_mjpeg(frame, boxes)
+                    ok, jpeg_buf = cv2.imencode(
+                        '.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
+                    )
+                    if ok:
+                        jpeg_bytes = jpeg_buf.tobytes()
+                        self.wfile.write(b'--FRAME\r\n')
+                        self.send_header('Content-Type', 'image/jpeg')
+                        self.send_header('Content-Length', str(len(jpeg_bytes)))
+                        self.end_headers()
+                        self.wfile.write(jpeg_bytes)
+                        self.wfile.write(b'\r\n')
+                time.sleep(MJPEG_POLL_INTERVAL_S)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass  # client dong tab/mat mang - binh thuong, khong phai loi
+
+
+class _MJPEGServer(http.server.ThreadingHTTPServer):
+    daemon_threads = True
+
+    def __init__(self, broadcaster, *args, **kwargs):
+        self.broadcaster = broadcaster
+        super().__init__(*args, **kwargs)
 
 
 class FrameBroadcaster:
@@ -57,6 +179,16 @@ class FrameBroadcaster:
         self._accept_thread.start()
         self._sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
         self._sender_thread.start()
+
+        # HTTP MJPEG rieng (port khac, khong dung chung Unix socket) - de
+        # nhung truc tiep vao Grafana qua the <img>. Chi ton CPU ve/encode
+        # LUC CO REQUEST dang mo (xem _MJPEGRequestHandler.do_GET) - dong
+        # tab/gap panel lai la ngung ngay, khong chay nen khi khong ai xem.
+        self._mjpeg_server = _MJPEGServer(
+            self, ('0.0.0.0', MJPEG_HTTP_PORT), _MJPEGRequestHandler
+        )
+        self._mjpeg_thread = threading.Thread(target=self._mjpeg_server.serve_forever, daemon=True)
+        self._mjpeg_thread.start()
 
     def _accept_loop(self):
         while not self._stop_flag.is_set():
@@ -166,6 +298,13 @@ class FrameBroadcaster:
         self._sender_thread.join(timeout=2)
         if os.path.exists(self.socket_path):
             os.remove(self.socket_path)
+
+        # shutdown() bat serve_forever() dung vong lap (goi tu thread khac
+        # thread dang chay serve_forever la an toan, day la cach lam chuan
+        # cua http.server). server_close() dong socket lang nghe han.
+        self._mjpeg_server.shutdown()
+        self._mjpeg_server.server_close()
+        self._mjpeg_thread.join(timeout=2)
 
 
 def _recv_exact(sock, n):
