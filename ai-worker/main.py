@@ -7,6 +7,15 @@ import threading
 import yaml
 import paho.mqtt.client as mqtt
 
+# Da dieu tra thuc te (py-spy, xem npu_plan.md): moi lan Thread-3
+# (process_stream, tieu thu) chay cum publish MQTT dinh ky (json.dumps +
+# client.publish), Thread-4 (producer, do FPS NPU) bi dip nhe ngay sau do
+# (2/2 lan bat duoc deu dip) - dau hieu tranh chap GIL. Mac dinh CPython
+# nhuong GIL cho thread khac moi 5ms (sys.getswitchinterval()) - giam
+# xuong 1ms de producer lay lai GIL nhanh hon khi bi giu, giam do tre toi
+# da phai cho. Khong doi kien truc/thread nao, rui ro thap.
+sys.setswitchinterval(0.001)
+
 from vehicle_classifier import VehicleClassifier
 from direction_counter import DirectionCounter
 from pipeline.frame_source import cpu_frame_source
