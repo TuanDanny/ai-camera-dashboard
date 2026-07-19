@@ -1,3 +1,4 @@
+import gc
 import os
 import sys
 import time
@@ -312,6 +313,25 @@ def main():
         t.daemon = True
         t.start()
         threads.append(t)
+
+    # Da dieu tra thuc te (xem npu_plan.md): FPS NPU (do tuc thoi tung
+    # frame, khong lam muot) thinh thoang rot khong deu (vd 45 -> 12-13fps)
+    # ngay ca khi CPU dang o max freq (loai governor) VA khung hinh khong
+    # co detection nao (loai workload dong xe) - dau hieu kinh dien cua GC
+    # (Garbage Collector) chu ky day (gen-2) dung ca interpreter vai chuc ms
+    # khong bao truoc. Doi vai giay de moi thread stream khoi tao xong cac
+    # object "tinh" (detector/tracker/classifier...) roi "dong bang" toan
+    # bo vao 1 generation vinh vien khong bi GC quet lai (gc.freeze()) -
+    # giam han chi phi moi lan GC full phai duyet qua toan bo object nay.
+    # Nang nguong GC (mac dinh 700,10,10) de giam han tan suat thu gom -
+    # KHONG tat han (gc.disable()) vi tien trinh chay lien tuc nhieu ngay,
+    # van can GC don dep reference cycle (vd closure trong producer thread)
+    # de tranh ri bo nho dai han.
+    time.sleep(2)
+    gc.collect()
+    gc.freeze()
+    gc.set_threshold(50_000, 50, 50)
+    print("[INFO] Da tune GC (freeze + nang nguong) de giam FPS rot do GC pause.")
 
     print("[INFO] AI Worker is running. Press Ctrl+C to exit.")
     try:
