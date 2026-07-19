@@ -79,7 +79,7 @@
     {
       "id": 3,
       "title": "Current FPS",
-      "description": "Gia tri fps moi nhat tu ai-worker, cap nhat moi publish.status_interval_s giay (mac dinh 3s) - doc lap voi cua so dem xe.",
+      "description": "Gia tri fps moi nhat tu ai-worker, cap nhat moi publish.status_interval_s giay (mac dinh 2s, khop refresh dashboard) - doc lap voi cua so dem xe.",
       "type": "stat",
       "datasource": "PostgreSQL",
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 8 },
@@ -195,5 +195,5 @@
     }
   ],
   "schemaVersion": 39,
-  "version": 6
+  "version": 7
 }

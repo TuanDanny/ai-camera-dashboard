@@ -58,8 +58,9 @@ publish:
   interval_s: 10
   topic_template: traffic/station/{station_id}/telemetry
   # Nhip rieng, nhanh hon, chi cho fps/inference_ms - KHONG anh huong toi
-  # cua so dem xe (van dung interval_s o tren).
-  status_interval_s: 3
+  # cua so dem xe (van dung interval_s o tren). Dat = 2 de khop voi
+  # refresh 2s cua panel "Current FPS" tren Grafana (Hardware Health).
+  status_interval_s: 2
   status_topic_template: traffic/station/{station_id}/ai_status
   # Canh bao mat/phuc hoi stream that (khong lien quan toi du lieu gia lap)
   alert_topic_template: traffic/station/{station_id}/alert
