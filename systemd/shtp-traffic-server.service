@@ -1,0 +1,18 @@
+[Unit]
+Description=SHTP Traffic Server - tu dong chay run.sh luc boot
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=shtp
+WorkingDirectory=/home/shtp/ai-camera-dashboard
+ExecStart=/bin/bash /home/shtp/ai-camera-dashboard/run.sh
+StandardOutput=append:/home/shtp/ai-camera-dashboard/run_boot.log
+StandardError=append:/home/shtp/ai-camera-dashboard/run_boot.log
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

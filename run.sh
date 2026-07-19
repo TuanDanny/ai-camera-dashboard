@@ -5,6 +5,23 @@ echo "Starting SHTP Traffic Server..."
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
+# Khoa chong chay-chong-chay: da gap thuc te 1 lan systemd tu dong chay
+# run.sh luc boot, nguoi dung khong biet lai tu tay chay them 1 lan nua -
+# 2 "docker compose up -d" dung luc dam vao nhau, tao container trung ten
+# roi ket ("Created", khong len duoc "Up"). flock -n (khong doi) tren 1 fd
+# rieng: neu dang co ban khac giu khoa, thoat ngay va bao ro thay vi de 2
+# tien trinh dua nhau goi docker/tao process.
+exec 200>"$DIR/.run.lock"
+if ! flock -n 200; then
+    echo "[ERROR] run.sh dang duoc 1 tien trinh khac chay roi (co the la systemd" >&2
+    echo "        tu dong luc boot) - thoat de tranh dam vao nhau (docker compose/" >&2
+    echo "        edge_agent.py/main.py chay trung). Kiem tra bang:" >&2
+    echo "          systemctl status shtp-traffic-server.service" >&2
+    echo "        Neu chac chan khong co ban nao khac dang chay, xoa file khoa:" >&2
+    echo "          rm '$DIR/.run.lock'" >&2
+    exit 1
+fi
+
 # Kiem tra tien trinh cu con sot lai TRUOC khi lam gi khac - tung gap truong
 # hop 2 bo edge_agent.py/main.py chay chung (1 bo cu quen tat + 1 bo run.sh
 # vua mo) tranh nhau CPU va /dev/video0, gay FPS tut manh ma khong ro nguyen
@@ -76,12 +93,16 @@ set +a
 python3 generate_flows.py
 
 echo "[INFO] Launching Docker containers..."
-sudo docker compose up -d
+# Khong dung "sudo" o day - user chay script nay da nam san trong group
+# "docker" (kiem tra: groups $USER phai co "docker") nen goi thang duoc,
+# khong can quyen root. Bat buoc phai bo sudo cho truong hop chay tu
+# dong luc boot qua systemd (khong co TTY de nhap password sudo, se dung
+# yen cho mai neu con "sudo").
+docker compose up -d
 
 echo "[INFO] Waiting a few seconds for Mosquitto/Postgres to settle before starting the edge/AI processes..."
 sleep 5
 
-PROCESSES_STARTED=false
 if [ ! -x "$AI_WORKER_VENV" ]; then
     echo ""
     echo "[WARN] ai-worker/.venv not found - skipping edge_agent.py and main.py."
@@ -114,7 +135,6 @@ else
         (cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
         echo "       Tail them with: tail -f '$EDGE_LOG' '$AI_LOG'"
     fi
-    PROCESSES_STARTED=true
 fi
 
 echo ""
@@ -141,37 +161,7 @@ if [ -n "$LAN_IP" ]; then
     echo " - MQTT Broker:       $LAN_IP:1883 (van can user/pass hop le trong mosquitto/passwd)"
 fi
 echo "========================================================="
-
-if [ "$PROCESSES_STARTED" = true ]; then
-    echo ""
-    read -p "Ban co muon mo view_stream.py de xem truc tiep stream dang duoc AI xu ly khong? (y/N): " SHOW_STREAM
-    if [[ "$SHOW_STREAM" =~ ^[Yy]$ ]]; then
-        VIEW_VENV="$DIR/ai-worker/.venv-view/bin/python3"
-        if [ -z "$DISPLAY" ]; then
-            echo "[WARN] Khong phat hien man hinh do hoa (bien DISPLAY trong) - view_stream.py can giao dien GUI de hien cua so video, khong mo duoc qua SSH thuan. Bo qua."
-        elif [ ! -x "$VIEW_VENV" ]; then
-            echo "[WARN] Khong tim thay $VIEW_VENV - can venv rieng co opencv GUI cho view_stream.py. Cai 1 lan bang:"
-            echo "          cd '$DIR/ai-worker' && python3 -m venv .venv-view && .venv-view/bin/pip install opencv-python pyyaml"
-            echo "        Mac dinh script nay dung 'view_stream.py --backend relay' (chi nhan lai ket qua"
-            echo "        da xu ly san tu main.py qua socket, khong tu chay YOLO rieng nua) - chi can 2 goi"
-            echo "        tren la du. Neu muon tu mo NPU rieng de debug ('view_stream.py --backend hailo',"
-            echo "        chi dung duoc khi main.py KHONG chay), .venv-view can them wiring toi"
-            echo "        hailo_platform/picamera2 cua he thong (file .pth) va cai them lap/cython_bbox/scipy."
-        else
-            echo "[INFO] Doi vai giay de stream on dinh truoc khi mo cua so xem..."
-            sleep 3
-            echo "[INFO] Nhan Q hoac ESC tren cua so video de dong va tiep tuc."
-            # main.py da chay san va LUON phat lai ket qua da xu ly (frame +
-            # box + fps) qua socket noi bo, bat ke dang dung backend cpu hay
-            # hailo (xem FrameBroadcaster trong main.py). Dung
-            # "--backend relay" de view_stream.py chi nhan lai ket qua co
-            # san nay ma hien thi - KHONG tu chay YOLO rieng (nhe hon backend
-            # cpu cu) va KHONG dung toi NPU nen khong bao gio dung do
-            # HAILO_OUT_OF_PHYSICAL_DEVICES (2 tien trinh OS rieng biet khong
-            # the cung mo 1 NPU vat ly). Muon xem qua chinh NPU (nang hon,
-            # chi de debug rieng) thi phai tat main.py truoc roi tu chay
-            # "view_stream.py --backend hailo" tay.
-            (cd "$DIR/ai-worker" && "$VIEW_VENV" view_stream.py --backend relay)
-        fi
-    fi
-fi
+# Xem truc tiep stream (co ve box/nhan) gio da co san ngay tren Grafana -
+# panel "Live Camera View" trong dashboard Traffic Overview (bien
+# "live_view" de bat/tat, "pi_host" de doi IP khi xem tu may khac LAN) -
+# khong can view_stream.py/venv rieng nua cho muc dich xem thuong.
