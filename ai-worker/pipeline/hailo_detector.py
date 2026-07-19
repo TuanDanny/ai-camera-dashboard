@@ -26,7 +26,14 @@ class HailoDetector:
         img_h, img_w = frame_bgr.shape[:2]
         scale = min(self.input_w / img_w, self.input_h / img_h)
         new_w, new_h = int(img_w * scale), int(img_h * scale)
-        resized = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+        # INTER_LINEAR (thay INTER_CUBIC) - re hon dang ke, giu native call
+        # ngan hon => giam cua so co the bi gianh GIL boi thread khac dung
+        # luc dang resize (da do duoc bang py-spy: 1 lan FPS rot xuong
+        # 16.6fps trung khop chinh xac luc dung 508ms tai dong resize nay -
+        # xem npu_plan.md). Chat luong resize giam nhe khong dang ke o day
+        # vi anh chi dung de letterbox truoc khi dua vao NPU, khong phai
+        # anh hien thi cuoi cung.
+        resized = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
         padded = np.full((self.input_h, self.input_w, 3), 114, dtype=np.uint8)
         x_off = (self.input_w - new_w) // 2
