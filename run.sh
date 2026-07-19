@@ -124,6 +124,22 @@ echo "========================================================="
 echo " - Grafana Dashboard: http://localhost:3000 (see .env for admin login)"
 echo " - Node-RED Flow:     http://localhost:1880"
 echo " - MQTT Broker:       localhost:1883"
+
+# Cac port tren da duoc docker-compose.yml publish ra 0.0.0.0 san (khong
+# gioi han 127.0.0.1), nen may khac CUNG mang LAN/WiFi voi Pi nay da truy
+# cap duoc ngay tu truoc (da kiem chung bang ss -tlnp) - chi can biet dung
+# IP LAN thay vi localhost. In them o day cho tien, khong phai bat/mo them
+# gi ca. LAN_IP lay IP dau tien tu hostname -I (thuong la NIC that, cac IP
+# docker bridge 172.17.x/172.18.x duoc gan sau nen nam phia sau trong danh
+# sach).
+LAN_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+if [ -n "$LAN_IP" ]; then
+    echo ""
+    echo " May khac cung mang LAN/WiFi truy cap qua IP: $LAN_IP"
+    echo " - Grafana Dashboard: http://$LAN_IP:3000"
+    echo " - Node-RED Flow:     http://$LAN_IP:1880"
+    echo " - MQTT Broker:       $LAN_IP:1883 (van can user/pass hop le trong mosquitto/passwd)"
+fi
 echo "========================================================="
 
 if [ "$PROCESSES_STARTED" = true ]; then
