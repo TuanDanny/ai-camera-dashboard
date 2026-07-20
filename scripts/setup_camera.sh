@@ -1,7 +1,9 @@
 #!/bin/bash
-# Wizard hoi chon nguon camera (CSI / IP Webcam / USB Webcam) va ghi vao
+# Wizard hoi chon nguon camera (IP Webcam / USB Webcam) va ghi vao
 # edge-rpi/config.yaml. Duoc goi tu run.sh, nhan duong dan file config lam
 # tham so dau tien - khong tu chay doc lap.
+# (Da bo lua chon camera CSI - khong dung toi trong trien khai thuc te,
+# start_stream.sh cung da bo nhanh xu ly "csi" tuong ung.)
 EDGE_CONFIG="$1"
 
 get_camera_field() {
@@ -22,26 +24,13 @@ set_camera_field() {
 
 echo ""
 echo "[SETUP] Chon nguon camera cho tram nay:"
-echo "  1) Raspberry Pi Camera Module (CSI)"
-echo "  2) IP Webcam (dien thoai Android, app IP Webcam)"
-echo "  3) USB Webcam (camera cam qua cong USB, vd /dev/video0)"
+echo "  1) IP Webcam (dien thoai Android, app IP Webcam)"
+echo "  2) USB Webcam (camera cam qua cong USB, vd /dev/video0)"
 CURRENT_CAM_TYPE=$(get_camera_field "type")
-read -p "Nhap 1, 2 hoac 3 (Enter de giu nguyen '${CURRENT_CAM_TYPE}'): " CAMERA_CHOICE
+read -p "Nhap 1 hoac 2 (Enter de giu nguyen '${CURRENT_CAM_TYPE}'): " CAMERA_CHOICE
 
 case "$CAMERA_CHOICE" in
     1)
-        set_camera_field "type" "csi"
-        echo "[INFO] Da dat camera.type = csi trong edge-rpi/config.yaml."
-        CSI_TOOL=$(command -v rpicam-hello || command -v libcamera-hello)
-        if [ -n "$CSI_TOOL" ]; then
-            if timeout 5 "$CSI_TOOL" --list-cameras 2>&1 | grep -qi "no cameras available"; then
-                echo "[WARN] Chua phat hien camera CSI nao cam vao - kiem tra lai day/ket noi. Cau hinh van duoc luu, ban co the cam camera sau va chay lai."
-            else
-                echo "[INFO] Da phat hien camera CSI."
-            fi
-        fi
-        ;;
-    2)
         set_camera_field "type" "ip_webcam"
         CURRENT_URL=$(get_camera_field "url")
         ATTEMPT=0
@@ -69,7 +58,7 @@ case "$CAMERA_CHOICE" in
             fi
         done
         ;;
-    3)
+    2)
         set_camera_field "type" "webcam"
         CURRENT_DEVICE=$(get_camera_field "device")
         echo "[INFO] Dang do cac camera USB dang cam vao..."

@@ -12,7 +12,7 @@ mqtt:
   keepalive: 60
 
 camera:
-  # Cac loai duoc ho tro: csi | webcam | ip_webcam (ip_webcam dung field url ben duoi)
+  # Cac loai duoc ho tro: webcam | ip_webcam (ip_webcam dung field url ben duoi)
   type: webcam
   device: /dev/video0
   # Chi dung khi camera la ip_webcam - lay tu man hinh Start server cua app IP Webcam

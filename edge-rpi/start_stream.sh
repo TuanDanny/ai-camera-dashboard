@@ -51,19 +51,7 @@ echo "[INFO] Target URL: $RTSP_URL"
 echo "[INFO] Resolution: ${WIDTH}x${HEIGHT} @ ${FPS}fps"
 echo "[INFO] Camera Type: $CAMERA_TYPE"
 
-if [ "$CAMERA_TYPE" == "csi" ]; then
-    # CSI Camera - rpicam-vid is the current tool name (rpicam-apps package,
-    # Bookworm/Trixie); libcamera-vid is the old name still found on some
-    # older Bullseye installs. Prefer whichever is actually installed.
-    CSI_BIN=$(command -v rpicam-vid || command -v libcamera-vid)
-    if [ -z "$CSI_BIN" ]; then
-        echo "[ERROR] Khong tim thay rpicam-vid hay libcamera-vid. Cai dat goi rpicam-apps truoc (sudo apt install rpicam-apps)."
-        exit 1
-    fi
-    echo "[INFO] Executing $CSI_BIN stream..."
-    "$CSI_BIN" -t 0 --inline --width "$WIDTH" --height "$HEIGHT" --framerate "$FPS" --bitrate "$BITRATE" -o - | \
-    ffmpeg -re -i - -vcodec copy -an -f rtsp -rtsp_transport tcp "$RTSP_URL"
-elif [ "$CAMERA_TYPE" == "webcam" ]; then
+if [ "$CAMERA_TYPE" == "webcam" ]; then
     # USB Webcam (using ffmpeg)
     echo "[INFO] Executing USB Webcam ffmpeg stream..."
     # Thu truoc: camera co ho tro xuat H264 phan cung truc tiep khong
