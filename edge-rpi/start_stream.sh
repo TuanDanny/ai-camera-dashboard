@@ -12,21 +12,37 @@ get_config_val() {
     grep -E "^[[:space:]]*$key:" "$CONFIG_FILE" | head -n 1 | cut -d':' -f2- | tr -d ' "'''
 }
 
+# Doc 1 key BEN TRONG 1 block cap 1 (vd "camera:", "server:") - dung range
+# sed "/^block:/,/^[a-zA-Z]/" (dung ky thuat da dung o set_camera_field cua
+# scripts/setup_camera.sh) de bat DUNG toan bo block cho toi khi gap dong
+# bat dau block ke tiep, KHONG dem so dong co dinh. Truoc day dung "grep -A
+# N" (N co dinh) - da xac nhan thuc te bi vo khi 1 block co them comment
+# giai thich dai hon N dong, khien cac key nam sau (vd width/height/fps)
+# roi ra NGOAI vung "-A N", tra ve rong -> ffmpeg nhan "-s x" (rong) -> loi
+# "Invalid argument", stream khong len duoc.
+get_block_val() {
+    local block="$1" key="$2"
+    sed -n "/^${block}:/,/^[a-zA-Z]/p" "$CONFIG_FILE" \
+        | grep -v '^[[:space:]]*#' \
+        | grep -E "^[[:space:]]+${key}:" \
+        | head -n 1 | cut -d':' -f2- | tr -d ' "'''
+}
+
 # Moi bien uu tien lay tu bien moi truong da duoc truyen san (vd tu
 # edge_agent.py - noi da doc config.yaml bang yaml.safe_load() dang hoang),
 # chi fallback ve grep/sed tu doc file khi chay tay doc lap (khong qua
 # edge_agent.py) de tranh 2 noi doc lech nhau 1 file config ma khong ai biet.
 STATION_ID="${STATION_ID:-$(get_config_val "station_id")}"
-SERVER_HOST="${SERVER_HOST:-$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "host:" | cut -d':' -f2- | tr -d ' "''')}"
-RTSP_PORT="${RTSP_PORT:-$(grep -A 3 "^server:" "$CONFIG_FILE" | grep "mediamtx_rtsp_port:" | cut -d':' -f2- | tr -d ' "''')}"
+SERVER_HOST="${SERVER_HOST:-$(get_block_val server host)}"
+RTSP_PORT="${RTSP_PORT:-$(get_block_val server mediamtx_rtsp_port)}"
 
-WIDTH="${WIDTH:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "width:" | cut -d':' -f2- | tr -d ' "''')}"
-HEIGHT="${HEIGHT:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "height:" | cut -d':' -f2- | tr -d ' "''')}"
-FPS="${FPS:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "fps:" | cut -d':' -f2- | tr -d ' "''')}"
-BITRATE="${BITRATE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "bitrate:" | cut -d':' -f2- | tr -d ' "''')}"
-CAMERA_TYPE="${CAMERA_TYPE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "type:" | cut -d':' -f2- | tr -d ' "''')}"
-DEVICE="${DEVICE:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "device:" | cut -d':' -f2- | tr -d ' "''')}"
-CAMERA_URL="${CAMERA_URL:-$(grep -A 9 "^camera:" "$CONFIG_FILE" | grep "url:" | cut -d':' -f2- | tr -d ' "''')}"
+WIDTH="${WIDTH:-$(get_block_val camera width)}"
+HEIGHT="${HEIGHT:-$(get_block_val camera height)}"
+FPS="${FPS:-$(get_block_val camera fps)}"
+BITRATE="${BITRATE:-$(get_block_val camera bitrate)}"
+CAMERA_TYPE="${CAMERA_TYPE:-$(get_block_val camera type)}"
+DEVICE="${DEVICE:-$(get_block_val camera device)}"
+CAMERA_URL="${CAMERA_URL:-$(get_block_val camera url)}"
 
 RTSP_URL="rtsp://$SERVER_HOST:$RTSP_PORT/$STATION_ID"
 

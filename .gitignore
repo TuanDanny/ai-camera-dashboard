@@ -50,4 +50,8 @@ nodered/flows.json
 edge-rpi/edge_agent.log
 ai-worker/ai_worker.log
 run_boot.log
+hailort.log
+hailort.*.log
+ai-worker/hailort.log
+ai-worker/hailort.*.log
 .run.lock

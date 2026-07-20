@@ -7,6 +7,15 @@ server:
 model:
   path: yolov8n_ncnn_model
   device: cpu
+  # QUAN TRONG: conf o day la nguong loc dua vao TRACKER (ByteTrack), KHONG
+  # phai nguong "co tinh la xe that hay khong" - phai de THAP (khop nguong
+  # thap ~0.1 ma byte_tracker.py hard-code san) de ByteTrack nhan du du
+  # lieu 0.1-0.20 cho co che rieng cua no (dung detection
+  # confidence THAP de "cuu" track dang co qua luc bi che khuat/mo -
+  # ByteTrack CHỈ mo track MOI khi >= track_high_thresh+0.1=0.30, nen
+  # khong lo xuat hien track rac tu nguong thap nay). Dem xe dung luc cat
+  # qua vach (xem direction: ben duoi) - vat the dung yen khong bao gio
+  # cat vach nen khong bi dem oan, du conf o day thap.
   imgsz: 512
   conf: 0.10
   iou: 0.50
@@ -31,15 +40,6 @@ model:
   # match_thresh).
   backend: cpu
   hailo_hef_path: /usr/share/hailo-models/yolov8s_h8l.hef
-
-classifier:
-  lock_after: 5
-  class_min_conf:
-    1: 0.12   # bicycle
-    2: 0.18   # car
-    3: 0.08   # motorcycle
-    5: 0.18   # bus
-    7: 0.18   # truck
 
 direction:
   # Duong ao nam ngang o y_ratio * chieu cao khung hinh.

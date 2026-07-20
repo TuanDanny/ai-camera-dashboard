@@ -30,20 +30,41 @@ MJPEG_POLL_INTERVAL_S = 0.05  # ~20fps cho xem qua dashboard - du muot,
                               # muc dich xem tong quan qua web).
 _MJPEG_COCO_MAP = {3: "motorbike", 2: "car", 7: "truck", 5: "bus", 1: "bicycle"}
 
+# Mau box theo tung loai xe (BGR - OpenCV dung nguoc thu tu so voi RGB),
+# khop voi mau cot cua tung panel "Total X Today" tren dashboard
+# Traffic Overview (grafana/dashboards/traffic_overview.json) de nhin
+# giua video va dashboard ra cung 1 mau la hieu ngay dang loai nao.
+_CATEGORY_COLORS_BGR = {
+    "motorbike": (0, 165, 255),   # cam
+    "car": (242, 148, 87),        # xanh duong
+    "truck": (211, 0, 148),       # tim
+    "bus": (0, 200, 0),           # xanh la
+    "bicycle": (255, 255, 0),     # xanh cyan (dashboard khong co panel rieng, tu chon)
+    "unknown": (150, 150, 150),   # xam
+}
+_COUNT_LINE_COLOR_BGR = (0, 0, 255)  # do
 
-def _draw_boxes_for_mjpeg(frame, boxes):
-    """Ve box + nhan len 1 BAN SAO cua frame (KHONG sua frame goc - frame
-    goc con duoc dung chung boi Unix socket sender de gui cho
-    view_stream.py, sua tai cho se lam "lem" box vao ca duong do)."""
+
+def _draw_boxes_for_mjpeg(frame, boxes, y_ratio=None):
+    """Ve box (mau theo loai xe) + nhan + vach dem (do) len 1 BAN SAO cua
+    frame (KHONG sua frame goc - frame goc con duoc dung chung boi Unix
+    socket sender de gui cho view_stream.py, sua tai cho se lam "lem" box
+    vao ca duong do)."""
     annotated = frame.copy()
+
+    if y_ratio is not None:
+        line_y = int(annotated.shape[0] * y_ratio)
+        cv2.line(annotated, (0, line_y), (annotated.shape[1], line_y), _COUNT_LINE_COLOR_BGR, 2)
+
     for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
         x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
         category = _MJPEG_COCO_MAP.get(cls_id, "unknown")
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        color = _CATEGORY_COLORS_BGR.get(category, _CATEGORY_COLORS_BGR["unknown"])
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
         label = f"ID {track_id} {category} {confidence:.2f}"
         cv2.putText(
             annotated, label, (x1, max(y1 - 10, 20)),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+            cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA
         )
     return annotated
 
@@ -112,8 +133,8 @@ class _MJPEGRequestHandler(http.server.BaseHTTPRequestHandler):
                 with broadcaster._latest_lock:
                     item = broadcaster._latest
                 if item is not None:
-                    _, frame, boxes, _, _ = item
-                    annotated = _draw_boxes_for_mjpeg(frame, boxes)
+                    _, frame, boxes, _, _, y_ratio = item
+                    annotated = _draw_boxes_for_mjpeg(frame, boxes, y_ratio=y_ratio)
                     ok, jpeg_buf = cv2.imencode(
                         '.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
                     )
@@ -216,12 +237,14 @@ class FrameBroadcaster:
         with self._client_lock:
             return self._client_conn is not None
 
-    def publish(self, station_id, frame, boxes, inference_ms, fps):
+    def publish(self, station_id, frame, boxes, inference_ms, fps, y_ratio=None):
         """Ghi de khung MOI NHAT can phat - khong encode/gui gi o day, chi
         1 phep gan bien co khoa (cuc nhanh), an toan de goi tu vong lap
-        NPU chinh moi frame ma khong lo lam cham no."""
+        NPU chinh moi frame ma khong lo lam cham no. y_ratio: vi tri vach
+        dem xe (0-1, ty le chieu cao khung hinh) - chi dung de VE (o
+        MJPEG), khong anh huong gi toi logic dem xe that trong main.py."""
         with self._latest_lock:
-            self._latest = (station_id, frame, boxes, inference_ms, fps)
+            self._latest = (station_id, frame, boxes, inference_ms, fps, y_ratio)
         self._new_data_event.set()
 
     def _sender_loop(self):
@@ -240,7 +263,7 @@ class FrameBroadcaster:
                 item = self._latest
             if item is None:
                 continue
-            station_id, frame, boxes, inference_ms, fps = item
+            station_id, frame, boxes, inference_ms, fps, y_ratio = item
 
             ok, jpeg_buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
             if not ok:

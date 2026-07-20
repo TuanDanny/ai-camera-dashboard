@@ -1,7 +1,16 @@
 tracker_type: bytetrack
+# track_low_thresh/new_track_thresh KHONG dat o day - da xac nhan bang
+# grep toan bo code: 2 tham so nay chua bao gio duoc byte_tracker.py doc
+# ca, no tu hard-code san "0.1" (nguong thap) va "track_thresh + 0.1"
+# (nguong tao track moi) ngay trong code, doi gia tri trong file nay
+# khong co tac dung gi. Dung sua nham tuong dang chinh duoc 2 muc nay.
 track_high_thresh: 0.20
-track_low_thresh: 0.05
-new_track_thresh: 0.12
 track_buffer: 30
 match_thresh: 0.80
-fuse_score: true
+# Da xac nhan bang test thuc te (npu_plan.md): "true" (nhan IoU voi
+# confidence detection thanh 1 cost truoc khi so match_thresh) khien track
+# de vo/doi ID luc co chuyen dong that - chi can confidence dao dong xuong
+# trung binh (0.22-0.30) CONG voi IoU khong hoan hao (binh thuong voi vat
+# the dang di chuyen) la du vuot nguong, du vi tri du doan dung. "false" =
+# chi dung IoU thuan, on dinh hon nhieu qua test (tinh/dong deu sach).
+fuse_score: false

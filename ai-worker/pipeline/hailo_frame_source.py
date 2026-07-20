@@ -14,6 +14,7 @@ STREAM_DOWN_THRESHOLD = 25  # so lan doc frame lien tiep that bai truoc khi bao 
 def hailo_frame_source(hailo_instance, url, target_classes, conf=0.10,
                         buffer_size=DEFAULT_BUFFER_SIZE,
                         track_thresh=0.25, track_buffer=30, match_thresh=0.8,
+                        fuse_score=True,
                         on_stream_down=None, on_stream_recovered=None,
                         on_frame_dropped=None):
     """Sinh (frame, boxes, inference_ms, fps) qua NPU Hailo, kien truc
@@ -52,8 +53,14 @@ def hailo_frame_source(hailo_instance, url, target_classes, conf=0.10,
     lam gi (vd publish alert), module nay khong biet gi ve MQTT.
     """
     detector = HailoDetector(hailo_instance, classes=target_classes, conf=conf)
+    # mot20=(not fuse_score): xem giai thich chi tiet trong hailo_tracker.py
+    # - "fuse_score" nhan tu confidence cua detection vao cost khop track,
+    # da xac nhan bang test thuc te la nguyen nhan gay track vo/doi ID lien
+    # tuc luc co chuyen dong that (confidence dao dong nhe + IoU khong hoan
+    # hao la du de vuot nguong, du vi tri track du doan dung).
     tracker = ClassAwareTracker(target_classes, track_thresh=track_thresh,
-                                 track_buffer=track_buffer, match_thresh=match_thresh)
+                                 track_buffer=track_buffer, match_thresh=match_thresh,
+                                 mot20=not fuse_score)
 
     buffer = queue.Queue(maxsize=buffer_size)
     dropped_count = 0

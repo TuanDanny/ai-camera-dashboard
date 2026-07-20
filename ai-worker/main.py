@@ -4,6 +4,7 @@ import sys
 import time
 import json
 import threading
+from collections import Counter
 import yaml
 import paho.mqtt.client as mqtt
 
@@ -16,7 +17,6 @@ import paho.mqtt.client as mqtt
 # da phai cho. Khong doi kien truc/thread nao, rui ro thap.
 sys.setswitchinterval(0.001)
 
-from vehicle_classifier import VehicleClassifier
 from direction_counter import DirectionCounter
 from pipeline.frame_source import cpu_frame_source
 from pipeline.frame_broadcast import FrameBroadcaster
@@ -66,9 +66,7 @@ if MODEL_BACKEND == 'hailo':
     HAILO_TRACK_THRESH = _tracker_yaml.get('track_high_thresh', 0.25)
     HAILO_TRACK_BUFFER = _tracker_yaml.get('track_buffer', 30)
     HAILO_MATCH_THRESH = _tracker_yaml.get('match_thresh', 0.8)
-
-LOCK_AFTER = config['classifier']['lock_after']
-CLASS_MIN_CONF = config['classifier']['class_min_conf']
+    HAILO_FUSE_SCORE = _tracker_yaml.get('fuse_score', False)
 
 DEFAULT_Y_RATIO = config['direction']['default_y_ratio']
 DEFAULT_INBOUND_WHEN = config['direction']['default_inbound_when']
@@ -126,12 +124,17 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
     print(f"[INFO] Starting AI Worker Thread for {station_id} ({location}) -> Stream: {url}")
 
     # Initialize trackers
-    # We maintain a set of tracked vehicle IDs seen in the current 10s interval
-    tracked_ids = {cat: set() for cat in COCO_MAP.values()}
-    tracked_ids["unknown"] = set()
-
-    # One classifier per stream/thread - state is never shared across stations
-    classifier = VehicleClassifier(CLASS_MIN_CONF, LOCK_AFTER)
+    # Dem theo kieu "cat qua duong" - GIONG HET cach interval_inbound/
+    # interval_outbound da lam dung tu dau (chi +1 dung 1 lan/track khi
+    # DirectionCounter bao co cat qua vach, KHONG BAO GIO dem lai). Truoc
+    # day tung dem loai xe kieu khac (dem MOI track_id dang thay trong 10s,
+    # bat ke co di qua duong hay khong) - gay 2 loai loi: (1) 1 xe dung yen
+    # lau bi cong don qua nhieu khoang 10s thanh vo han, (2) track "ma"/
+    # nham (bat ky ly do gi - flicker, false-positive tinh, vo track luc di
+    # chuyen) van bi dem ngay ca khi khong phai xe that di qua. Gio CHi
+    # dem dung luc co 1 vach cat qua thuc su - don gian hon nhieu, khop
+    # dung y nghia "dem xe" that.
+    interval_category_counts = Counter()
 
     direction_cfg = stream_info.get('direction_line', {})
     y_ratio = direction_cfg.get('y_ratio', DEFAULT_Y_RATIO)
@@ -159,7 +162,7 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
 
     def on_frame_dropped(dropped_count):
         # Rot khung o day nghia la buffer NPU (buffer_size=4) day - CPU
-        # (VehicleClassifier/DirectionCounter/publish) khong theo kip NPU.
+        # (DirectionCounter/publish) khong theo kip NPU.
         # Chi log de theo doi thuc te (npu_plan.md muc 3.3), khong publish
         # alert MQTT vi 1-2 khung le te khong phai su co nghiem trong.
         print(f"[WARN] [{station_id}] Buffer NPU day, da rot {dropped_count} "
@@ -176,7 +179,7 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
             hailo_instance, url, TARGET_CLASSES, conf=CONF_THRESH,
             buffer_size=4,
             track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
-            match_thresh=HAILO_MATCH_THRESH,
+            match_thresh=HAILO_MATCH_THRESH, fuse_score=HAILO_FUSE_SCORE,
             on_stream_down=on_stream_down, on_stream_recovered=on_stream_recovered,
             on_frame_dropped=on_frame_dropped
         )
@@ -194,16 +197,13 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
         # Phat lai khung + ket qua da xu ly qua socket cho view_stream.py
         # (neu co client dang xem) - KHONG chay YOLO lan 2 nua. publish()
         # cuc nhe (chi ghi de bien), khong lam cham vong lap NPU o day.
+        # y_ratio dinh kem de ben nhan (frame_broadcast._draw_boxes_for_mjpeg)
+        # ve dung vach do o dung vi tri dang dem xe qua.
         if broadcaster is not None:
-            broadcaster.publish(station_id, frame, boxes, inference_ms, fps)
+            broadcaster.publish(station_id, frame, boxes, inference_ms, fps, y_ratio=y_ratio)
 
+        any_crossing_this_frame = False
         for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
-            locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
-            classifier.mark_seen(track_id, frame_index)
-
-            category = COCO_MAP.get(locked_cls, "unknown")
-            tracked_ids[category].add(track_id)
-
             interval_confidences.append(confidence)
             detections_raw_count += 1
 
@@ -211,12 +211,23 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
             crossing = direction_counter.update(track_id, centroid_y, frame_height, frame_index)
             direction_counter.mark_seen(track_id, frame_index)
 
-            if crossing == "inbound":
-                interval_inbound += 1
-            elif crossing == "outbound":
-                interval_outbound += 1
+            # CHI dem xe dung luc thuc su cat qua vach - DirectionCounter
+            # da tu chong dem lai (self.counted set), nen moi track chi +1
+            # DUNG 1 LAN duy nhat trong suot vong doi cua no. Dung thang
+            # class_id ma tracker dang bao O DUNG FRAME cat vach (khong
+            # qua binh chon/khoa nhieu frame nhu truoc - da bo
+            # VehicleClassifier vi khong con can thiet: vat the dung yen
+            # khong bao gio cat vach nen khong bi dem oan, con vat the that
+            # su di chuyen qua vach thi class luc do la du tin cay).
+            if crossing is not None:
+                category = COCO_MAP.get(cls_id, "unknown")
+                interval_category_counts[category] += 1
+                any_crossing_this_frame = True
+                if crossing == "inbound":
+                    interval_inbound += 1
+                elif crossing == "outbound":
+                    interval_outbound += 1
 
-        classifier.cleanup_old_tracks(frame_index)
         direction_counter.cleanup_old_tracks(frame_index)
 
         now = time.time()
@@ -234,16 +245,22 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
             client.publish(status_topic, json.dumps(status_payload), qos=0)
             status_interval_start = now
 
-        # Check if interval is up to publish stats
-        if now - interval_start >= PUBLISH_INTERVAL:
-            # Compile data
-            motorbike_cnt = len(tracked_ids["motorbike"])
-            car_cnt = len(tracked_ids["car"])
-            truck_cnt = len(tracked_ids["truck"])
-            bus_cnt = len(tracked_ids["bus"])
-            bicycle_cnt = len(tracked_ids["bicycle"])
-            unknown_cnt = len(tracked_ids["unknown"])
-            total_cnt = motorbike_cnt + car_cnt + truck_cnt + bus_cnt + bicycle_cnt + unknown_cnt
+        # Gui ngay khi vua co xe cat qua vach (khong cho du PUBLISH_INTERVAL
+        # nua) - dashboard cap nhat tuc thi thay vi tre toi da 10s. Van giu
+        # nhip PUBLISH_INTERVAL cho luc KHONG co xe nao ca (gui du lieu
+        # avg_confidence/detections_raw/lighting_condition dinh ky, tranh
+        # dashboard "im lang" hoan toan luc duong vang xe).
+        if any_crossing_this_frame or now - interval_start >= PUBLISH_INTERVAL:
+            # Compile data - interval_category_counts chi tang luc THUC SU
+            # cat qua vach (xem vong lap o tren), khong phai snapshot track
+            # dang co trong khung.
+            motorbike_cnt = interval_category_counts.get("motorbike", 0)
+            car_cnt = interval_category_counts.get("car", 0)
+            truck_cnt = interval_category_counts.get("truck", 0)
+            bus_cnt = interval_category_counts.get("bus", 0)
+            bicycle_cnt = interval_category_counts.get("bicycle", 0)
+            unknown_cnt = interval_category_counts.get("unknown", 0)
+            total_cnt = sum(interval_category_counts.values())
 
             avg_confidence = round(sum(interval_confidences) / len(interval_confidences), 2) if interval_confidences else 0.0
             min_confidence = round(min(interval_confidences), 2) if interval_confidences else 0.0
@@ -285,8 +302,7 @@ def process_stream(stream_info, hailo_instance=None, broadcaster=None):
             print(f"[{station_id}] Published AI Telemetry (Total: {total_cnt})")
 
             # Reset interval
-            tracked_ids = {cat: set() for cat in COCO_MAP.values()}
-            tracked_ids["unknown"] = set()
+            interval_category_counts = Counter()
             interval_confidences = []
             detections_raw_count = 0
             interval_inbound = 0
@@ -329,7 +345,7 @@ def main():
     # co detection nao (loai workload dong xe) - dau hieu kinh dien cua GC
     # (Garbage Collector) chu ky day (gen-2) dung ca interpreter vai chuc ms
     # khong bao truoc. Doi vai giay de moi thread stream khoi tao xong cac
-    # object "tinh" (detector/tracker/classifier...) roi "dong bang" toan
+    # object "tinh" (detector/tracker/direction_counter...) roi "dong bang" toan
     # bo vao 1 generation vinh vien khong bi GC quet lai (gc.freeze()) -
     # giam han chi phi moi lan GC full phai duyet qua toan bo object nay.
     # Nang nguong GC (mac dinh 700,10,10) de giam han tan suat thu gom -

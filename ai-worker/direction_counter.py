@@ -2,8 +2,8 @@ class DirectionCounter:
     """Phat hien huong di chuyen (inbound/outbound) qua 1 duong ao nam ngang.
 
     Moi camera stream (moi thread trong ai-worker) phai tu tao rieng 1
-    instance cua class nay - cung ly do nhu VehicleClassifier: track_id
-    bi danh so lai tu dau o moi stream, dung chung se lan state.
+    instance cua class nay - track_id bi danh so lai tu dau o moi stream,
+    dung chung se lan state.
     """
 
     def __init__(self, y_ratio: float, inbound_when: str):

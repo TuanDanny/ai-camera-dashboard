@@ -1,7 +1,7 @@
 """
 Debug viewer: hien thi truc tiep nhung gi ai-worker dang nhin thay va nhan
-dien, dung THAT su config.yaml + VehicleClassifier cua ai-worker (khong
-phai ban gia lap rieng). Khong publish MQTT, chi ve box + nhan len man hinh.
+dien, dung THAT su config.yaml cua ai-worker (khong phai ban gia lap
+rieng). Khong publish MQTT, chi ve box + nhan len man hinh.
 
 Can chay bang mot python co opencv KHONG phai ban "headless" (ai-worker/
 .venv dung opencv-python-headless, khong ho tro cv2.imshow). Dung venv
@@ -29,7 +29,6 @@ import yaml
 import cv2
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vehicle_classifier import VehicleClassifier  # noqa: E402
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(CONFIG_PATH, 'r') as f:
@@ -39,14 +38,29 @@ CONF_THRESH = config['model']['conf']
 TARGET_CLASSES = config['model']['classes']
 TRACKER_CONFIG = os.path.join(os.path.dirname(__file__), config['model']['tracker_config'])
 
-LOCK_AFTER = config['classifier']['lock_after']
-CLASS_MIN_CONF = config['classifier']['class_min_conf']
-
 STREAM = config['streams'][0]
 STREAM_URL = STREAM['url']
 STATION_ID = STREAM['station_id']
 
+# y_ratio: vi tri vach dem xe (0-1, ty le chieu cao khung hinh) - doc
+# truc tiep tu config giong main.py, KHONG can truyen qua socket vi
+# view_stream.py chi xem 1 station duy nhat (config['streams'][0]) nen
+# doc thang tu config la du, don gian hon.
+_direction_cfg = STREAM.get('direction_line', {})
+Y_RATIO = _direction_cfg.get('y_ratio', config['direction']['default_y_ratio'])
+
 COCO_MAP = {3: "motorbike", 2: "car", 7: "truck", 5: "bus", 1: "bicycle"}
+# Mau box theo tung loai xe (BGR), khop voi mau cot tren dashboard Traffic
+# Overview - xem cung dinh nghia trong pipeline/frame_broadcast.py.
+CATEGORY_COLORS_BGR = {
+    "motorbike": (0, 165, 255),
+    "car": (242, 148, 87),
+    "truck": (211, 0, 148),
+    "bus": (0, 200, 0),
+    "bicycle": (255, 255, 0),
+    "unknown": (150, 150, 150),
+}
+COUNT_LINE_COLOR_BGR = (0, 0, 255)
 WINDOW_NAME = f"AI Worker live view - {STATION_ID}"
 
 _arg_parser = argparse.ArgumentParser()
@@ -77,11 +91,10 @@ if MODEL_BACKEND == 'hailo':
     HAILO_TRACK_THRESH = _tracker_yaml.get('track_high_thresh', 0.25)
     HAILO_TRACK_BUFFER = _tracker_yaml.get('track_buffer', 30)
     HAILO_MATCH_THRESH = _tracker_yaml.get('match_thresh', 0.8)
+    HAILO_FUSE_SCORE = _tracker_yaml.get('fuse_score', False)
 
 
 def main():
-    classifier = VehicleClassifier(CLASS_MIN_CONF, LOCK_AFTER)
-
     print(f"[INFO] Backend: {MODEL_BACKEND}")
     print(f"[INFO] Dang ket noi stream: {STREAM_URL}")
 
@@ -116,7 +129,7 @@ def main():
             hailo_instance, STREAM_URL, TARGET_CLASSES, conf=CONF_THRESH,
             buffer_size=1,
             track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
-            match_thresh=HAILO_MATCH_THRESH,
+            match_thresh=HAILO_MATCH_THRESH, fuse_score=HAILO_FUSE_SCORE,
         )
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -144,22 +157,22 @@ def main():
             frame = orig_frame.copy()
             active_count = 0
 
+            line_y = int(frame.shape[0] * Y_RATIO)
+            cv2.line(frame, (0, line_y), (frame.shape[1], line_y), COUNT_LINE_COLOR_BGR, 2)
+
             for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
-                locked_cls = classifier.get_locked_class(track_id, cls_id, confidence)
-                classifier.mark_seen(track_id, frame_index)
-                category = COCO_MAP.get(locked_cls, "unknown")
+                category = COCO_MAP.get(cls_id, "unknown")
+                color = CATEGORY_COLORS_BGR.get(category, CATEGORY_COLORS_BGR["unknown"])
                 active_count += 1
 
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                 label = f"ID {track_id} {category} {confidence:.2f}"
                 cv2.putText(
                     frame, label, (x1, max(y1 - 10, 20)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2, cv2.LINE_AA
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA
                 )
-
-            classifier.cleanup_old_tracks(frame_index)
 
             cv2.putText(
                 frame, f"Frame {frame_index} | Active tracks: {active_count}",

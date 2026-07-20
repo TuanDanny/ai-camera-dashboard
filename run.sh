@@ -118,11 +118,22 @@ else
         fi
     done
 
+    # 200>&- tren moi lenh chay nen ben duoi: DONG fd cua khoa flock (mo o
+    # dong "exec 200>..." dau file) truoc khi tach tien trinh con - neu
+    # khong, edge_agent.py/main.py (hoac cua so terminal rieng) se THUA KE
+    # fd nay va tiep tuc GIU khoa song mai ngay ca sau khi ban than run.sh
+    # da thoat xong. Hau qua thuc te da gap: lan chay run.sh SAU khong bao
+    # gio toi duoc doan "[CHECK] do tien trinh cu" o tren (dung ra se hoi
+    # co muon tat ban cu de chay lai sach khong) - ma bi flock chan ngay tu
+    # dau, tuong nham "co ban khac dang chay" trong khi thuc ra chi la
+    # tien trinh nen cua chinh lan chay TRUOC do con giu khoa. Dong fd nay
+    # o day de khoa chi con song dung trong vong doi cua rieng "run.sh"
+    # goc, giai phong ngay sau khi no in xong banner ket thuc.
     if [ -n "$DISPLAY" ] && [ -n "$TERMINAL" ]; then
         echo "[INFO] Opening edge_agent.py and ai-worker/main.py in their own terminal windows ($TERMINAL)..."
-        "$TERMINAL" -e bash -c "cd '$DIR/edge-rpi' && '$AI_WORKER_VENV' -u edge_agent.py; echo; echo '[edge_agent.py stopped]'; exec bash" &
+        "$TERMINAL" -e bash -c "cd '$DIR/edge-rpi' && '$AI_WORKER_VENV' -u edge_agent.py; echo; echo '[edge_agent.py stopped]'; exec bash" 200>&- &
         sleep 1
-        "$TERMINAL" -e bash -c "cd '$DIR/ai-worker' && '$AI_WORKER_VENV' -u main.py; echo; echo '[main.py stopped]'; exec bash" &
+        "$TERMINAL" -e bash -c "cd '$DIR/ai-worker' && '$AI_WORKER_VENV' -u main.py; echo; echo '[main.py stopped]'; exec bash" 200>&- &
     else
         # Note: the shared logs/ directory is owned by the docker containers
         # (root), not this user, so these host-side process logs live next
@@ -131,8 +142,13 @@ else
         AI_LOG="$DIR/ai-worker/ai_worker.log"
         echo "[INFO] No graphical display detected (running headless/over SSH) - starting edge_agent.py and main.py in the background instead."
         echo "       Logs: $EDGE_LOG and $AI_LOG"
-        (cd "$DIR/edge-rpi" && nohup "$AI_WORKER_VENV" -u edge_agent.py > "$EDGE_LOG" 2>&1 &)
-        (cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
+        # Dong fd 200 NGAY DAU subshell (khong chi tren lenh nohup ben trong)
+        # - da xac nhan qua test thuc te: neu chi dong tren lenh nohup, ban
+        # than tien trinh "vo boc" cua subshell "(...)" van con giu fd 200
+        # mo (thay bang fuser .run.lock van thay 2 tien trinh bash con song
+        # sau khi script chinh da thoat), khien khoa van khong giai phong.
+        (exec 200>&-; cd "$DIR/edge-rpi" && nohup "$AI_WORKER_VENV" -u edge_agent.py > "$EDGE_LOG" 2>&1 &)
+        (exec 200>&-; cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
         echo "       Tail them with: tail -f '$EDGE_LOG' '$AI_LOG'"
     fi
 fi
