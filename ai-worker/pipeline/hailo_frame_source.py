@@ -5,7 +5,6 @@ import time
 import cv2
 
 from pipeline.hailo_detector import HailoDetector
-from pipeline.hailo_tracker import ClassAwareTracker
 
 DEFAULT_BUFFER_SIZE = 1
 STREAM_DOWN_THRESHOLD = 25  # so lan doc frame lien tiep that bai truoc khi bao "mat ket noi"
@@ -13,30 +12,31 @@ STREAM_DOWN_THRESHOLD = 25  # so lan doc frame lien tiep that bai truoc khi bao 
 
 def hailo_frame_source(hailo_instance, url, target_classes, conf=0.10,
                         buffer_size=DEFAULT_BUFFER_SIZE,
-                        track_thresh=0.25, track_buffer=30, match_thresh=0.8,
-                        fuse_score=True,
                         on_stream_down=None, on_stream_recovered=None,
                         on_frame_dropped=None):
     """Sinh (frame, boxes, inference_ms, fps) qua NPU Hailo, kien truc
     producer-consumer bat dong bo (xem npu_plan.md muc 3.3):
 
     - 1 thread nen (producer) doc frame tu RTSP -> detect (HailoDetector)
-      -> track (ClassAwareTracker) -> dong goi khung -> day vao buffer noi
-      bo. KHONG BAO GIO cho consumer - neu buffer day, ghi de khung cu
-      nhat (drop-oldest).
+      -> dong goi khung -> day vao buffer noi bo. KHONG BAO GIO cho
+      consumer - neu buffer day, ghi de khung cu nhat (drop-oldest).
     - Ham nay (generator, chay o thread cua nguoi goi = "consumer") chi
       lay khung MOI NHAT tu buffer, KHONG BAO GIO cho producer qua lau
       (dung timeout).
+
+    KHONG con tracking (ByteTrack) o day nua - da bo hoan toan theo yeu
+    cau don gian hoa (chi con YOLO tho + vach do dem xe, xem
+    direction_counter.py). boxes tra ve moi frame la detection THO cua
+    frame do, khong con track_id/lien tuc giua cac frame.
 
     hailo_instance: PHAI duoc tao san boi nguoi goi qua
     pipeline.hailo_source.create_hailo() TU 1 THREAD DUY NHAT (xem
     hailo_source.py va npu_plan.md muc 2.2b/3.4) - ham nay khong tu tao
     Hailo() moi, chi nhan lai instance co san.
 
-    boxes tra ve: list (track_id, class_id, score, x1, y1, x2, y2) - CUNG
-    hinh dang voi pipeline.frame_source.cpu_frame_source() de main.py/
-    view_stream.py dung chung 1 vong lap khong can biet dang dung backend
-    nao.
+    boxes tra ve: list (class_id, score, x1, y1, x2, y2) - CUNG hinh dang
+    voi pipeline.frame_source.cpu_frame_source() de main.py/view_stream.py
+    dung chung 1 vong lap khong can biet dang dung backend nao.
 
     buffer_size: do sau buffer.
       - 1 (mac dinh): luon giu dung ban moi nhat, ghi de ban cu ngay khi
@@ -53,14 +53,6 @@ def hailo_frame_source(hailo_instance, url, target_classes, conf=0.10,
     lam gi (vd publish alert), module nay khong biet gi ve MQTT.
     """
     detector = HailoDetector(hailo_instance, classes=target_classes, conf=conf)
-    # mot20=(not fuse_score): xem giai thich chi tiet trong hailo_tracker.py
-    # - "fuse_score" nhan tu confidence cua detection vao cost khop track,
-    # da xac nhan bang test thuc te la nguyen nhan gay track vo/doi ID lien
-    # tuc luc co chuyen dong that (confidence dao dong nhe + IoU khong hoan
-    # hao la du de vuot nguong, du vi tri track du doan dung).
-    tracker = ClassAwareTracker(target_classes, track_thresh=track_thresh,
-                                 track_buffer=track_buffer, match_thresh=match_thresh,
-                                 mot20=not fuse_score)
 
     buffer = queue.Queue(maxsize=buffer_size)
     dropped_count = 0
@@ -94,7 +86,7 @@ def hailo_frame_source(hailo_instance, url, target_classes, conf=0.10,
 
             t0 = time.perf_counter()
             dets = detector.detect(frame)
-            boxes = tracker.update(dets)
+            boxes = [(cls_id, score, x1, y1, x2, y2) for x1, y1, x2, y2, score, cls_id in dets]
             elapsed = time.perf_counter() - t0
             inference_ms = int(elapsed * 1000)
             fps = 1.0 / elapsed if elapsed > 0 else 0.0

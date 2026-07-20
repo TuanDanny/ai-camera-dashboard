@@ -7,21 +7,18 @@ server:
 model:
   path: yolov8n_ncnn_model
   device: cpu
-  # QUAN TRONG: conf o day la nguong loc dua vao TRACKER (ByteTrack), KHONG
-  # phai nguong "co tinh la xe that hay khong" - phai de THAP (khop nguong
-  # thap ~0.1 ma byte_tracker.py hard-code san) de ByteTrack nhan du du
-  # lieu 0.1-0.20 cho co che rieng cua no (dung detection
-  # confidence THAP de "cuu" track dang co qua luc bi che khuat/mo -
-  # ByteTrack CHỈ mo track MOI khi >= track_high_thresh+0.1=0.30, nen
-  # khong lo xuat hien track rac tu nguong thap nay). Dem xe dung luc cat
-  # qua vach (xem direction: ben duoi) - vat the dung yen khong bao gio
-  # cat vach nen khong bi dem oan, du conf o day thap.
+  # Nguong loc detection cua YOLO. Truoc day phai de THAP (0.10) vi
+  # ByteTrack can du lieu confidence thap (0.1-0.20) cho co che rescue
+  # track qua luc bi che khuat/mo - da bo ByteTrack hoan toan (chi con
+  # YOLO tho + vach do de dem, xem direction_counter.py) nen rang buoc do
+  # khong con nua. Nang len 0.45 (gia tri nguoi dung da tu xac nhan hop
+  # ly truoc day) de loc bot false positive (vd toa nha/vat the tinh bi
+  # nham thanh xe bus luc conf thap).
   imgsz: 512
-  conf: 0.10
+  conf: 0.45
   iou: 0.50
   max_det: 60
   classes: [1, 2, 3, 5, 7]
-  tracker_config: tracker/traffic_bytetrack.yaml
   # backend: "cpu" (mac dinh, dung model/imgsz/iou/path o tren qua
   # ultralytics) hoac "hailo" (dung NPU Hailo-8L 13 TOPS qua HailoRT -
   # nhanh gap ~4-8 lan CPU, do thuc te ~40-46fps/camera, ~21-24ms/frame).
@@ -34,20 +31,17 @@ model:
   #   echo "/usr/lib/python3/dist-packages" | sudo tee \
   #     ai-worker/.venv/lib/python3*/site-packages/hailo_system.pth
   # Khi backend=hailo: path/imgsz/iou/device o tren bi bo qua, model duoc
-  # nap tu hailo_hef_path thay vi MODEL_PATH; tracking dung ByteTrack rieng
-  # cho tung lop xe (khong qua pipeline tracking cua ultralytics), van doc
-  # chung tham so tu tracker_config o tren (track_high_thresh/track_buffer/
-  # match_thresh).
+  # nap tu hailo_hef_path thay vi MODEL_PATH.
   backend: cpu
   hailo_hef_path: /usr/share/hailo-models/yolov8s_h8l.hef
 
 direction:
-  # Duong ao nam ngang o y_ratio * chieu cao khung hinh.
-  # inbound_when: "increasing" neu xe di chuyen xuong duoi khung hinh (y tang) la vao,
-  # "decreasing" neu nguoc lai. Tung tram co the override rieng bang khoa
-  # "direction_line" (cung 2 field nay) trong muc streams ben duoi.
+  # Duong ao nam ngang o y_ratio * chieu cao khung hinh - box cat qua vach
+  # nay la duoc dem. Tung tram co the override rieng bang khoa
+  # "direction_line" (field "y_ratio") trong muc streams ben duoi. Khong
+  # con phan biet inbound/outbound (can tracking/track_id de biet huong
+  # di chuyen thuc, da bo hoan toan - xem direction_counter.py).
   default_y_ratio: 0.5
-  default_inbound_when: increasing
 
 streams:
   - station_id: ST-001

@@ -56,12 +56,12 @@ def _draw_boxes_for_mjpeg(frame, boxes, y_ratio=None):
         line_y = int(annotated.shape[0] * y_ratio)
         cv2.line(annotated, (0, line_y), (annotated.shape[1], line_y), _COUNT_LINE_COLOR_BGR, 2)
 
-    for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
+    for cls_id, confidence, x1, y1, x2, y2 in boxes:
         x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
         category = _MJPEG_COCO_MAP.get(cls_id, "unknown")
         color = _CATEGORY_COLORS_BGR.get(category, _CATEGORY_COLORS_BGR["unknown"])
         cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
-        label = f"ID {track_id} {category} {confidence:.2f}"
+        label = f"{category} {confidence:.2f}"
         cv2.putText(
             annotated, label, (x1, max(y1 - 10, 20)),
             cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA

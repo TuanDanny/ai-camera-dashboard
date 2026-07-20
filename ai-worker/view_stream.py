@@ -16,8 +16,7 @@ Che do mac dinh/nhe nhat la "relay" (chi nhan lai ket qua main.py da xu ly
 san qua socket, xem pipeline/frame_broadcast.py) - chi can opencv-python +
 pyyaml o tren la du, khong can ultralytics/torch gi ca. Che do "hailo" (tu
 mo NPU rieng de debug khi main.py khong chay) can them wiring toi
-hailo_platform cua he thong (file .pth) va cai them lap/cython_bbox/scipy
-(xem WALKTHROUGH.md muc 6-7).
+hailo_platform cua he thong (file .pth) - xem WALKTHROUGH.md muc 6-7.
 
 Nhan Q hoac ESC tren cua so de thoat.
 """
@@ -36,7 +35,6 @@ with open(CONFIG_PATH, 'r') as f:
 
 CONF_THRESH = config['model']['conf']
 TARGET_CLASSES = config['model']['classes']
-TRACKER_CONFIG = os.path.join(os.path.dirname(__file__), config['model']['tracker_config'])
 
 STREAM = config['streams'][0]
 STREAM_URL = STREAM['url']
@@ -86,13 +84,6 @@ if MODEL_BACKEND == 'hailo':
     except ImportError as e:
         print(f"[WARN] --backend hailo nhung khong import duoc thu vien Hailo: {e}")
 
-    with open(TRACKER_CONFIG, 'r') as f:
-        _tracker_yaml = yaml.safe_load(f)
-    HAILO_TRACK_THRESH = _tracker_yaml.get('track_high_thresh', 0.25)
-    HAILO_TRACK_BUFFER = _tracker_yaml.get('track_buffer', 30)
-    HAILO_MATCH_THRESH = _tracker_yaml.get('match_thresh', 0.8)
-    HAILO_FUSE_SCORE = _tracker_yaml.get('fuse_score', False)
-
 
 def main():
     print(f"[INFO] Backend: {MODEL_BACKEND}")
@@ -128,8 +119,6 @@ def main():
         source = hailo_frame_source(
             hailo_instance, STREAM_URL, TARGET_CLASSES, conf=CONF_THRESH,
             buffer_size=1,
-            track_thresh=HAILO_TRACK_THRESH, track_buffer=HAILO_TRACK_BUFFER,
-            match_thresh=HAILO_MATCH_THRESH, fuse_score=HAILO_FUSE_SCORE,
         )
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
@@ -160,7 +149,7 @@ def main():
             line_y = int(frame.shape[0] * Y_RATIO)
             cv2.line(frame, (0, line_y), (frame.shape[1], line_y), COUNT_LINE_COLOR_BGR, 2)
 
-            for track_id, cls_id, confidence, x1, y1, x2, y2 in boxes:
+            for cls_id, confidence, x1, y1, x2, y2 in boxes:
                 x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
                 category = COCO_MAP.get(cls_id, "unknown")
@@ -168,14 +157,14 @@ def main():
                 active_count += 1
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                label = f"ID {track_id} {category} {confidence:.2f}"
+                label = f"{category} {confidence:.2f}"
                 cv2.putText(
                     frame, label, (x1, max(y1 - 10, 20)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2, cv2.LINE_AA
                 )
 
             cv2.putText(
-                frame, f"Frame {frame_index} | Active tracks: {active_count}",
+                frame, f"Frame {frame_index} | Detections: {active_count}",
                 (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA
             )
             cv2.putText(

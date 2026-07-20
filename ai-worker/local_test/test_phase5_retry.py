@@ -61,10 +61,10 @@ class FakeYOLO:
     def __init__(self, model_path):
         print(f"[fake yolo] loaded model_path={model_path}")
 
-    def track(self, **kwargs):
+    def predict(self, **kwargs):
         attempt_counter["n"] += 1
         n = attempt_counter["n"]
-        print(f"[fake yolo] track() called - day la lan goi thu {n}")
+        print(f"[fake yolo] predict() called - day la lan goi thu {n}")
 
         if n == 1:
             raise RuntimeError("gia lap loi tam thoi (vd: RTSP glitch)")

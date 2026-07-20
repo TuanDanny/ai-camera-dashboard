@@ -18,13 +18,15 @@ STREAM_RETRY_BACKOFF_S = 5
 
 
 def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh,
-                      target_classes, max_det, tracker_config,
+                      target_classes, max_det,
                       on_stream_down=None, on_stream_recovered=None):
-    """Sinh (frame, boxes, inference_ms, fps) cho tung frame da qua YOLO+tracker.
+    """Sinh (frame, boxes, inference_ms, fps) cho tung frame qua YOLO THO
+    (khong con tracking/ByteTrack - da bo hoan toan theo yeu cau don gian
+    hoa, xem direction_counter.py).
 
     frame: anh goc (r.orig_img) - KHONG copy, ben goi tu copy() neu can ve
     len anh ma khong muon dung chung buffer voi ultralytics.
-    boxes: list cac tuple (track_id, cls_id, confidence, x1, y1, x2, y2).
+    boxes: list cac tuple (cls_id, confidence, x1, y1, x2, y2).
     Tu quan ly viec load model va retry/backoff khi mat stream - khong bao
     gio tra ve False/None, chi (re)raise neu 'ultralytics' khong cai duoc.
     on_stream_down(attempt) / on_stream_recovered() la callback tuy chon de
@@ -44,16 +46,14 @@ def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh
             device = 'cuda' if cv2.cuda.getCudaEnabledDeviceCount() > 0 else 'cpu'
             print(f"[INFO] [{station_id}] Running YOLO on device: {device} (attempt {attempt})")
 
-            results = model.track(
+            results = model.predict(
                 source=url,
-                persist=True,
                 stream=True,
                 conf=conf_thresh,
                 imgsz=imgsz,
                 iou=iou_thresh,
                 classes=target_classes,
                 max_det=max_det,
-                tracker=tracker_config,
                 device=device,
                 verbose=False
             )
@@ -72,13 +72,12 @@ def cpu_frame_source(station_id, url, model_path, conf_thresh, imgsz, iou_thresh
                 fps = 1000.0 / (sum(r.speed.values()) + 1e-6)
 
                 boxes = []
-                if r.boxes is not None and r.boxes.is_track:
+                if r.boxes is not None:
                     for box in r.boxes:
                         cls_id = int(box.cls[0].item())
-                        track_id = int(box.id[0].item())
                         confidence = float(box.conf[0].item())
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        boxes.append((track_id, cls_id, confidence, x1, y1, x2, y2))
+                        boxes.append((cls_id, confidence, x1, y1, x2, y2))
 
                 yield r.orig_img, boxes, inference_ms, fps
 
