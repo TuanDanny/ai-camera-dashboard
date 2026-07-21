@@ -29,11 +29,17 @@ fi
 # bang "-u edge_agent.py"/"-u main.py" (chay qua .venv nay), tranh nham voi
 # process khac (vd shell wrapper) chi tinh co chua chuoi do o giua dong lenh.
 AI_WORKER_VENV="$DIR/ai-worker/.venv/bin/python3"
+TG_BOT_VENV="$DIR/tg_bot/.venv/bin/python3"
 echo ""
 echo "[CHECK] Dang kiem tra tien trinh cu con sot lai tu lan chay truoc..."
 STRAY_PY=$(pgrep -f "\.venv/bin/python3 -u (edge_agent|main)\.py\$" 2>/dev/null)
+# tg_bot chay bang "-m tg_bot.bot" (khong phai "-u <file>.py") nen can pattern
+# rieng - QUAN TRONG: neu sot lai 1 ban tg_bot cu con polling, ban moi mo them
+# se bi Telegram tra loi "Conflict: terminated by other getUpdates request"
+# ngay lap tuc (chi 1 client duoc polling tren 1 bot token cung luc).
+STRAY_TG_BOT=$(pgrep -f "tg_bot/\.venv/bin/python3 -m tg_bot\.bot\$" 2>/dev/null)
 STRAY_FFMPEG=$(pgrep -f "ffmpeg .*-rtsp_transport tcp rtsp://" 2>/dev/null)
-STRAY_ALL=$(printf '%s\n%s\n' "$STRAY_PY" "$STRAY_FFMPEG" | grep -v '^$' | sort -u)
+STRAY_ALL=$(printf '%s\n%s\n%s\n' "$STRAY_PY" "$STRAY_TG_BOT" "$STRAY_FFMPEG" | grep -v '^$' | sort -u)
 
 if [ -n "$STRAY_ALL" ]; then
     echo "[WARN] Phat hien tien trinh cu dang chay tu truoc - neu mo them ban moi se"
@@ -147,10 +153,32 @@ else
         # than tien trinh "vo boc" cua subshell "(...)" van con giu fd 200
         # mo (thay bang fuser .run.lock van thay 2 tien trinh bash con song
         # sau khi script chinh da thoat), khien khoa van khong giai phong.
-        (exec 200>&-; cd "$DIR/edge-rpi" && nohup "$AI_WORKER_VENV" -u edge_agent.py > "$EDGE_LOG" 2>&1 &)
-        (exec 200>&-; cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
+        #
+        # Cung ly do do, redirect luon ca stdout/stderr (>/dev/null 2>&1) cua
+        # BAN THAN subshell (khong chi cua nohup ben trong): da xac nhan qua
+        # test thuc te (bash run.sh | tail ...) - neu khong, subshell "vo boc"
+        # nay tiep tuc giu fd 1/2 tro toi stdout/stderr GOC cua run.sh (vd 1
+        # pipe hoac phien SSH khong tuong tac) song mai ngay ca sau khi
+        # run.sh da in xong banner va thoat, khien bat ky ai/cai gi doc output
+        # cua run.sh qua pipe treo cho EOF vo thoi han du script that su da
+        # chay xong tu lau.
+        (exec 200>&- >/dev/null 2>&1; cd "$DIR/edge-rpi" && nohup "$AI_WORKER_VENV" -u edge_agent.py > "$EDGE_LOG" 2>&1 &)
+        (exec 200>&- >/dev/null 2>&1; cd "$DIR/ai-worker" && nohup "$AI_WORKER_VENV" -u main.py > "$AI_LOG" 2>&1 &)
         echo "       Tail them with: tail -f '$EDGE_LOG' '$AI_LOG'"
     fi
+fi
+
+if [ ! -x "$TG_BOT_VENV" ]; then
+    echo ""
+    echo "[WARN] tg_bot/.venv not found - skipping tg_bot (bot Telegram dieu khien)."
+    echo "        Set it up once with:"
+    echo "          cd '$DIR/tg_bot' && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+    echo "        Then run this script again."
+else
+    TG_BOT_LOG="$DIR/tg_bot/tg_bot.log"
+    echo "[INFO] Starting tg_bot (bot Telegram dieu khien) in the background..."
+    echo "       Log: $TG_BOT_LOG"
+    (exec 200>&- >/dev/null 2>&1; cd "$DIR" && nohup "$TG_BOT_VENV" -m tg_bot.bot > "$TG_BOT_LOG" 2>&1 &)
 fi
 
 echo ""

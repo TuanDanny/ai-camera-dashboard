@@ -31,6 +31,7 @@ ai-worker/local_test/*.mp4
 ai-worker/yolov8n_ncnn_model/
 ai-worker/.venv/
 ai-worker/.venv-view/
+tg_bot/.venv/
 
 # Real device/service configs contain live credentials - only the
 # *.example templates are tracked. Copy to the real filename and fill
@@ -49,6 +50,8 @@ nodered/flows.json
 # Host-side process logs from run.sh (headless fallback)
 edge-rpi/edge_agent.log
 ai-worker/ai_worker.log
+tg_bot/tg_bot.log
+tg_bot/bot_test.log
 run_boot.log
 hailort.log
 hailort.*.log

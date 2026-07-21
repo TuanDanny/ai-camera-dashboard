@@ -75,7 +75,16 @@ def generate_flows():
             "usernames": "",
             "chatids": "",
             "baseapiurl": "",
-            "updatemode": "polling",
+            # Node nay chi dung de GUI canh bao (node "telegram sender"), khong
+            # co node nhan lenh nao ca - nhung "updatemode: polling" van khien
+            # no goi getUpdates lien tuc tren CUNG 1 bot token voi tg_bot/ moi
+            # (chay rieng, host-level), gay xung dot "Conflict: terminated by
+            # other getUpdates request" vi Telegram chi cho 1 client polling
+            # tren 1 token. Dat "webhook" nhung KHONG dien bothost/certificate
+            # (con thieu cau hinh) khien thu vien tu fallback ve "send only
+            # mode" (xem log node: "Defaulting to send only mode") - tat han
+            # polling ma khong dong gi khac, de tg_bot la ben duy nhat polling.
+            "updatemode": "webhook",
             "pollinterval": "300",
             "usesocks": False,
             "sockshost": "",

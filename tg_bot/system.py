@@ -5,7 +5,10 @@ check) lan lenh nguy hiem (restartyolo/restartmqtt/reboot/cleardb).
 Tat ca ham o day la SYNC (goi subprocess/psycopg2 chan luong) - command
 handler (async) phai goi qua asyncio.to_thread(...).
 """
+import shutil
+import socket
 import subprocess
+import urllib.request
 
 from tg_bot import config, db
 
@@ -90,6 +93,42 @@ def reboot_system() -> str:
     duoc cau hinh sudo reboot khong can nhap password (visudo: NOPASSWD)."""
     subprocess.Popen(["sudo", "reboot"])
     return "Da gui lenh reboot - may se tat trong vai giay."
+
+
+def check_postgres() -> bool:
+    """Kiem tra Postgres THAT SU tra loi duoc query, khong chi container
+    'running' (container co the len nhung DB ben trong dang treo)."""
+    try:
+        db.fetch_one("SELECT 1;")
+        return True
+    except Exception:
+        return False
+
+
+def check_mqtt_port() -> bool:
+    try:
+        with socket.create_connection(
+            (config.MQTT_HOST, config.MQTT_PORT), timeout=3
+        ):
+            return True
+    except OSError:
+        return False
+
+
+def check_mjpeg_snapshot() -> bool:
+    """Goi thu endpoint /snapshot cua ai-worker - neu tra ve duoc nghia la
+    main.py con song VA dang co frame camera that (khong chi tien trinh
+    con chay nhung camera bi treo/mat tin hieu)."""
+    try:
+        with urllib.request.urlopen(config.MJPEG_SNAPSHOT_URL, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def disk_usage_pct() -> float:
+    total, used, _free = shutil.disk_usage(config.REPO_ROOT)
+    return round(used / total * 100, 1)
 
 
 def clear_traffic_data() -> str:

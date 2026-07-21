@@ -37,4 +37,12 @@ MJPEG_SNAPSHOT_URL = os.environ.get(
     "TG_BOT_MJPEG_SNAPSHOT_URL", "http://localhost:8090/snapshot"
 )
 
+# Chi 1 station duy nhat dang trien khai thuc te (xem ai-worker/config.yaml
+# streams[0].station_id) - dung cho cac lenh traffic/report/history de khoi
+# phai bat nguoi dung go them station_id moi lan goi lenh.
+DEFAULT_STATION_ID = os.environ.get("TG_BOT_DEFAULT_STATION_ID", "ST-001")
+
 REPO_ROOT = _ROOT_DIR
+
+# Dung cho lenh /version - tang tay moi khi doi logic cac lenh dang ke.
+BOT_VERSION = "1.0.0"
