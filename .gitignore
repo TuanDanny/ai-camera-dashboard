@@ -55,3 +55,4 @@ hailort.*.log
 ai-worker/hailort.log
 ai-worker/hailort.*.log
 .run.lock
+scripts/reset_traffic.sh

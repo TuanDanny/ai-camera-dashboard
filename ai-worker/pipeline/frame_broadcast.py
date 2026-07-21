@@ -98,6 +98,9 @@ class _MJPEGRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == '/snapshot':
+            self._handle_snapshot()
+            return
         if parsed.path != '/stream':
             self.send_error(404)
             return
@@ -149,6 +152,37 @@ class _MJPEGRequestHandler(http.server.BaseHTTPRequestHandler):
                 time.sleep(MJPEG_POLL_INTERVAL_S)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass  # client dong tab/mat mang - binh thuong, khong phai loi
+
+    def _handle_snapshot(self):
+        """GET /snapshot - tra ve DUNG 1 anh JPEG hien tai (khong phai
+        multipart lien tuc nhu /stream) - dung cho tg_bot/ (lenh view/
+        snapshot) hoac bat ky noi nao chi can 1 khung hinh don le, khong
+        can giu ket noi mo lien tuc."""
+        broadcaster = self.server.broadcaster
+        with broadcaster._latest_lock:
+            item = broadcaster._latest
+        if item is None:
+            self.send_error(503, "Chua co khung hinh nao (ai-worker moi khoi dong?)")
+            return
+
+        _, frame, boxes, _, _, y_ratio = item
+        annotated = _draw_boxes_for_mjpeg(frame, boxes, y_ratio=y_ratio)
+        ok, jpeg_buf = cv2.imencode(
+            '.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
+        )
+        if not ok:
+            self.send_error(500, "Khong encode duoc JPEG")
+            return
+        jpeg_bytes = jpeg_buf.tobytes()
+        try:
+            self.send_response(200)
+            self.send_header('Content-Type', 'image/jpeg')
+            self.send_header('Content-Length', str(len(jpeg_bytes)))
+            self.send_header('Cache-Control', 'no-cache, private')
+            self.end_headers()
+            self.wfile.write(jpeg_bytes)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
 
 
 class _MJPEGServer(http.server.ThreadingHTTPServer):
