@@ -1,3 +1,17 @@
+# File mau (template) - KHONG dung nguyen file nay, phai thay 2 placeholder
+# "__RUN_AS_USER__" va "__REPO_DIR__" ben duoi bang gia tri that cua may ban
+# truoc khi cai. Cach nhanh nhat: dung sed thay the roi ghi thang ra
+# /etc/systemd/system/ (chay tu thu muc goc cua repo nay):
+#
+#   sed -e "s#__REPO_DIR__#$(pwd)#g" -e "s#__RUN_AS_USER__#$(whoami)#g" \
+#     systemd/shtp-traffic-server.service | sudo tee \
+#     /etc/systemd/system/shtp-traffic-server.service >/dev/null
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now shtp-traffic-server.service
+#
+# Kiem tra sau khi cai: systemctl status shtp-traffic-server.service
+# Xem log: tail -f __REPO_DIR__/run_boot.log
+
 [Unit]
 Description=SHTP Traffic Server - tu dong chay run.sh luc boot
 After=network-online.target docker.service
@@ -7,11 +21,11 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-User=shtp
-WorkingDirectory=/home/shtp/ai-camera-dashboard
-ExecStart=/bin/bash /home/shtp/ai-camera-dashboard/run.sh
-StandardOutput=append:/home/shtp/ai-camera-dashboard/run_boot.log
-StandardError=append:/home/shtp/ai-camera-dashboard/run_boot.log
+User=__RUN_AS_USER__
+WorkingDirectory=__REPO_DIR__
+ExecStart=/bin/bash __REPO_DIR__/run.sh
+StandardOutput=append:__REPO_DIR__/run_boot.log
+StandardError=append:__REPO_DIR__/run_boot.log
 TimeoutStartSec=300
 
 [Install]

@@ -4,11 +4,12 @@ chinh xac kich ban loi (stream ket thuc em dep khong exception - dung nguyen
 nhan gay UnboundLocalError truoc day), xem process_stream() co con crash
 hay khong va co thu lai (retry) dung nhu thiet ke moi khong.
 """
+import os
 import sys
 import types
 import time
 
-AI_WORKER_DIR = "/home/shtp/ai-camera-dashboard/ai-worker"
+AI_WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, AI_WORKER_DIR)
 
 # ---- Stub cv2 ----

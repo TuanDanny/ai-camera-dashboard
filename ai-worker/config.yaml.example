@@ -5,7 +5,31 @@ server:
   mqtt_password: changeme
 
 model:
-  path: yolov8n_ncnn_model
+  # BAT BUOC dien duong dan that vao day - repo nay KHONG commit san model
+  # (ncnn export la thu muc chua file binary, xem .gitignore) nen khong co
+  # gia tri mac dinh nao chay duoc ngay.
+  #
+  # Dinh dang file duoc ho tro (backend=cpu): path o day duoc truyen thang
+  # vao "ultralytics.YOLO(path)" (xem ai-worker/pipeline/frame_source.py),
+  # nen bat ky dinh dang nao ultralytics tu doc duoc deu dung duoc - KHONG
+  # bat buoc phai la ncnn:
+  #   - Da co san file .pt (vd tu train/download rieng, hoac yolov8n.pt/
+  #     yolov8s.pt...) -> CAM LA CHAY NGAY: chi can dien thang duong dan
+  #     toi file .pt do vao day, khong can export gi them. Don gian nhat
+  #     nhung cham hon ncnn tren CPU yeu (vd Raspberry Pi).
+  #   - Muon toc do tot hon tren Pi (khuyen nghi) -> export sang ncnn 1 lan
+  #     (xem chi tiet o README.md muc "Model Setup"):
+  #       cd ai-worker && .venv/bin/yolo export model=yolov8n.pt format=ncnn imgsz=512
+  #     Lenh tren tu tai yolov8n.pt (~6MB) roi xuat ra thu muc
+  #     "yolov8n_ncnn_model/" ngay trong ai-worker/ - dien duong dan (tuong
+  #     doi tinh tu ai-worker/, hoac tuyet doi) toi thu muc do vao day.
+  #   - Cac dinh dang khac ultralytics ho tro (.onnx, .torchscript, .engine,
+  #     .tflite,...) cung nap duoc tuong tu, chua duoc test thuc te tren
+  #     repo nay nhung ve nguyen tac hoat dong giong .pt.
+  # Luu y: "classes: [1, 2, 3, 5, 7]" ben duoi la chi so class theo COCO
+  # (bicycle/car/motorcycle/bus/truck) - neu dung model tu train rieng voi
+  # bo class khac, phai sua lai danh sach nay cho khop.
+  path: /PATH/TO/YOUR/MODEL (vd: /PATH/TO/YOUR/yolov8n_ncnn_model hoac /PATH/TO/YOUR/yolov8n.pt)
   device: cpu
   # Nguong loc detection cua YOLO. Truoc day phai de THAP (0.10) vi
   # ByteTrack can du lieu confidence thap (0.1-0.20) cho co che rescue

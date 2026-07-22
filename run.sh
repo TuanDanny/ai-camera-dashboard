@@ -80,7 +80,8 @@ fi
 if [ ! -f "ai-worker/config.yaml" ]; then
     echo "[INFO] ai-worker/config.yaml not found. Creating from config.yaml.example..."
     cp ai-worker/config.yaml.example ai-worker/config.yaml
-    echo "[WARN] ai-worker/config.yaml still has placeholder values - edit mqtt_password and streams before running ai-worker."
+    echo "[WARN] ai-worker/config.yaml still has placeholder values - edit mqtt_password, streams,"
+    echo "       and model.path (see README.md 'Model Setup') before running ai-worker."
 fi
 
 if [ ! -f "edge-rpi/config.yaml" ]; then
