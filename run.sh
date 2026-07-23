@@ -105,7 +105,34 @@ echo "[INFO] Launching Docker containers..."
 # khong can quyen root. Bat buoc phai bo sudo cho truong hop chay tu
 # dong luc boot qua systemd (khong co TTY de nhap password sudo, se dung
 # yen cho mai neu con "sudo").
-docker compose up -d
+#
+# Sau 1 lan tat may khong sach (mat dien dot ngot, hoac "shutdown" nhung
+# rut nguon truoc khi container kip dung han), da gap thuc te: lan boot
+# sau do "docker compose up -d" bao loi "Conflict, container name already
+# in use" va cac container bi ket vinh vien o trang thai "Created" (chua
+# bao gio thuc su "Running" lan nao ca) - "restart: unless-stopped" trong
+# docker-compose.yml KHONG cuu duoc truong hop nay vi policy do chi tu
+# khoi dong lai container DA TUNG chay roi bi dung, khong ap dung cho
+# container moi tao nhung chua kip start lan nao. Hau qua: toan bo
+# Grafana/Node-RED/... "chet" ngay tu dau nhung script van in banner
+# "RUNNING!" vi khong kiem tra exit code cua lenh nay.
+# Fix: neu "up -d" that bai, don sach roi thu lai 1 lan. "docker compose
+# down --remove-orphans" chi dong toi container ma compose NHAN RA la
+# thuoc project nay (qua label) - da xac nhan qua test thuc te: container
+# bi ket o trang thai "Created" tu 1 lan "up -d" TRUOC do bi loi giua
+# chung (vd loi tao network) co the khong duoc gan label day du, khien
+# "down" bo qua no, retry van dam vao dung 1 loi "Conflict" y het lan dau.
+# Fix chac chan hon: xoa THANG theo dung ten container da biet truoc (danh
+# sach service trong docker-compose.yml), bat ke co label hay khong -
+# "docker rm -f" tren ten khong ton tai se loi nhung khong sao (|| true).
+if ! docker compose up -d; then
+    echo "[WARN] 'docker compose up -d' that bai (co the do container ket lai tu lan tat may khong sach truoc do) - dang don sach va thu lai..."
+    docker compose down --remove-orphans
+    for c in shtp-postgres shtp-mosquitto shtp-mediamtx shtp-mqttx-web shtp-grafana shtp-nodered; do
+        docker rm -f "$c" >/dev/null 2>&1 || true
+    done
+    docker compose up -d
+fi
 
 echo "[INFO] Waiting a few seconds for Mosquitto/Postgres to settle before starting the edge/AI processes..."
 sleep 5
@@ -117,13 +144,26 @@ if [ ! -x "$AI_WORKER_VENV" ]; then
     echo "          cd '$DIR/ai-worker' && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
     echo "        Then run this script again."
 else
+    # Qua SSH, "$DISPLAY" co the van con set (vd Pi dang login desktop cuc
+    # bo, bien nay sot lai trong session) nhung khong co man hinh nao de
+    # x-terminal-emulator/xterm mo cua so len ca - hoac se fail thang, hoac
+    # te hon la mo nham len man hinh vat ly cua Pi ma nguoi dang SSH khong
+    # thay duoc. Nhan dien phien SSH qua cac bien chuan (SSH dat san khi
+    # login) va ep ve nhanh chay nen ngay ca khi "$DISPLAY" co gia tri.
+    IS_SSH_SESSION=false
+    if [ -n "$SSH_CONNECTION" ] || [ -n "$SSH_TTY" ] || [ -n "$SSH_CLIENT" ]; then
+        IS_SSH_SESSION=true
+    fi
+
     TERMINAL=""
-    for t in x-terminal-emulator lxterminal xterm; do
-        if command -v "$t" >/dev/null 2>&1; then
-            TERMINAL="$t"
-            break
-        fi
-    done
+    if [ "$IS_SSH_SESSION" = false ]; then
+        for t in x-terminal-emulator lxterminal xterm; do
+            if command -v "$t" >/dev/null 2>&1; then
+                TERMINAL="$t"
+                break
+            fi
+        done
+    fi
 
     # 200>&- tren moi lenh chay nen ben duoi: DONG fd cua khoa flock (mo o
     # dong "exec 200>..." dau file) truoc khi tach tien trinh con - neu
@@ -136,7 +176,7 @@ else
     # tien trinh nen cua chinh lan chay TRUOC do con giu khoa. Dong fd nay
     # o day de khoa chi con song dung trong vong doi cua rieng "run.sh"
     # goc, giai phong ngay sau khi no in xong banner ket thuc.
-    if [ -n "$DISPLAY" ] && [ -n "$TERMINAL" ]; then
+    if [ -n "$DISPLAY" ] && [ -n "$TERMINAL" ] && [ "$IS_SSH_SESSION" = false ]; then
         echo "[INFO] Opening edge_agent.py and ai-worker/main.py in their own terminal windows ($TERMINAL)..."
         "$TERMINAL" -e bash -c "cd '$DIR/edge-rpi' && '$AI_WORKER_VENV' -u edge_agent.py; echo; echo '[edge_agent.py stopped]'; exec bash" 200>&- &
         sleep 1
@@ -147,7 +187,11 @@ else
         # to their own scripts instead.
         EDGE_LOG="$DIR/edge-rpi/edge_agent.log"
         AI_LOG="$DIR/ai-worker/ai_worker.log"
-        echo "[INFO] No graphical display detected (running headless/over SSH) - starting edge_agent.py and main.py in the background instead."
+        if [ "$IS_SSH_SESSION" = true ]; then
+            echo "[INFO] Running over SSH - starting edge_agent.py and main.py in the background instead of opening terminal windows."
+        else
+            echo "[INFO] No graphical display detected (running headless) - starting edge_agent.py and main.py in the background instead."
+        fi
         echo "       Logs: $EDGE_LOG and $AI_LOG"
         # Dong fd 200 NGAY DAU subshell (khong chi tren lenh nohup ben trong)
         # - da xac nhan qua test thuc te: neu chi dong tren lenh nohup, ban
