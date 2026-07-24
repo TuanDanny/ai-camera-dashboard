@@ -1,5 +1,9 @@
 .env
 npu_plan.md
+CONTRACT_CHANGELOG.md
+Bao_Cao_SHTP_Server.md
+WALKTHROUGH.md
+architecture.html
 logs/
 backups/
 media/
