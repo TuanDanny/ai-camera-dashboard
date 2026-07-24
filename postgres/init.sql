@@ -124,19 +124,26 @@ CREATE TABLE IF NOT EXISTS watchdog_events (
     reset_count_since_boot  INT,
     received_at             TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
+    -- 'service_restart'/'supervisor_reboot' them cho tg_bot/supervisor.py
+    -- (giam sat phan mem, restart tung dich vu/reboot ca may khi can) -
+    -- 5 gia tri con lai la cho khai niem ESP32<->Luckfox cheo (IC cung)
+    -- chua tung trien khai. 'power_cycle_detected' dung chung cho ca 2
+    -- truong hop (khong the phan biet chac chan neu khong co IC that).
     CONSTRAINT chk_event_type CHECK (event_type IN (
         'luckfox_reset_by_esp32',
         'esp32_reset_by_luckfox',
         'hw_watchdog_triggered',
         'power_cycle_detected',
-        'manual_reset'
+        'manual_reset',
+        'service_restart',
+        'supervisor_reboot'
     ))
 );
 
 CREATE INDEX idx_watchdog_station_time ON watchdog_events(station_id, event_at DESC);
 CREATE INDEX idx_watchdog_event_type   ON watchdog_events(event_type, event_at DESC);
 
-COMMENT ON TABLE watchdog_events IS 'Nhật ký sự kiện Watchdog reset (ESP32↔Luckfox chéo, IC cứng)';
+COMMENT ON TABLE watchdog_events IS 'Nhật ký sự kiện Watchdog reset (ESP32↔Luckfox chéo, IC cứng, và Supervisor phần mềm)';
 
 -- -----------------------------------------------------------
 -- 6. NETWORK_QUALITY
